@@ -1,0 +1,8 @@
+# Copyright (c) 2024 The ZMK Contributors
+# SPDX-License-Identifier: MIT
+
+description: Mouse Gesture behavior
+
+compatible: "zmk,behavior-mouse-gesture"
+
+include: zero_param.yaml

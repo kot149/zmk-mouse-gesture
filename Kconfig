@@ -1,0 +1,10 @@
+# Copyright (c) 2024 The ZMK Contributors
+# SPDX-License-Identifier: MIT
+
+config ZMK_MOUSE_GESTURE
+	bool "Enable mouse gesture support"
+	default y
+	depends on ZMK_POINTING
+	help
+	  Enable mouse gesture support for ZMK.
+	  This allows converting sequences of mouse movements into key presses.

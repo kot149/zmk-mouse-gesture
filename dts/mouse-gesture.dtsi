@@ -1,0 +1,21 @@
+/*
+ * Copyright (c) 2024 The ZMK Contributors
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#include <dt-bindings/zmk/mouse-gesture.h>
+
+/ {
+    /omit-if-no-ref/ zip_mouse_gesture: zip_mouse_gesture {
+        compatible = "zmk,input-processor-mouse-gesture";
+        #input-processor-cells = <0>;
+        stroke-size = <300>;
+        movement-threshold = <10>;
+    };
+
+    /omit-if-no-ref/ mouse_gesture: mouse_gesture {
+        compatible = "zmk,behavior-mouse-gesture";
+        #binding-cells = <0>;
+    };
+};

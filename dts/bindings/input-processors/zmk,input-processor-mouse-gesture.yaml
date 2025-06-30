@@ -1,0 +1,39 @@
+# Copyright (c) 2024 The ZMK Contributors
+# SPDX-License-Identifier: MIT
+
+description: Mouse Gesture Input Processor
+
+compatible: "zmk,input-processor-mouse-gesture"
+
+properties:
+  "#input-processor-cells":
+    type: int
+    const: 0
+    description: "Number of cells in input processor specifier"
+
+  track-remainders:
+    type: boolean
+    description: "Whether to track remainders"
+
+  stroke-size:
+    type: int
+    default: 1000
+    description: "Size of one stroke in a gesture"
+
+  movement-threshold:
+    type: int
+    default: 10
+    description: "Threshold for each x/y event"
+
+child-binding:
+  description: "Mouse gesture definition"
+  properties:
+    gesture:
+      type: array
+      required: true
+      description: "Array of gesture directions that make up this gesture sequence"
+
+    bindings:
+      type: phandle-array
+      required: true
+      description: "Behaviors to be invoked when this gesture is detected"
