@@ -123,7 +123,7 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 - `GESTURE_DOWN_LEFT` - Diagonal down-left movement
 - `GESTURE_DOWN_RIGHT` - Diagonal down-right movement
 
-### 5. Peform gesture
+### 5. Perform the gesture
 
 Hold the activation key and perform the gesture.
 
