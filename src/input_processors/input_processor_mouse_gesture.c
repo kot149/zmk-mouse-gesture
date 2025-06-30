@@ -164,6 +164,8 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
 
     // Check if mouse gesture is active
     if (!zmk_mouse_gesture_is_active()) {
+        data->acc_x = 0;
+        data->acc_y = 0;
         data->sequence_len = 0;
         return ZMK_INPUT_PROC_CONTINUE;
     }

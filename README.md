@@ -132,5 +132,5 @@ Hold the activation key and perform the gesture.
 While `&mouse_gesture` is pressed, `&zip_mouse_gesture` listens to mouse input events and accumulates the movement value.
 When accumulated value become bigger than `stroke-size`, the processor judges its direction, then pushes it to mouse gesture sequence.
 When matching gesture found for the sequence, its bindings will be invoked.
-The accumulated value is reset when the direction is detected.
-The sequence is cleared when a gesture is detected or activation key is released.
+The accumulated value is reset when the direction is detected or the activation key is released.
+The sequence is cleared when a gesture is detected or the activation key is released.
