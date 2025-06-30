@@ -79,17 +79,17 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
         bindings = <&kp LA(RIGHT)>;
     };
 
-	// Down then right gesture for close tab (Ctrl+W)
-	close_tab {
-		gesture = <GESTURE_DOWN GESTURE_RIGHT>;
-		bindings = <&kp LC(W)>;
-	};
+    // Down then right gesture for close tab (Ctrl+W)
+    close_tab {
+        gesture = <GESTURE_DOWN GESTURE_RIGHT>;
+        bindings = <&kp LC(W)>;
+    };
 
-	// Down then left gesture for new tab (Ctrl+T)
-	new_tab {
-		gesture = <GESTURE_DOWN GESTURE_LEFT>;
-		bindings = <&kp LC(T)>;
-	};
+    // Down then left gesture for new tab (Ctrl+T)
+    new_tab {
+        gesture = <GESTURE_DOWN GESTURE_LEFT>;
+        bindings = <&kp LC(T)>;
+    };
 
     // Clockwise triangle gesture for volume up
     volume_up {
