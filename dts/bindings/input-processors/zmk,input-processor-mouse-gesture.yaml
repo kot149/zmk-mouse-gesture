@@ -25,6 +25,10 @@ properties:
     default: 10
     description: "Threshold for each x/y event"
 
+  enable-8way:
+    type: boolean
+    description: "Whether to enable 8-way gesture detection. If disabled, only 4-way gesture detection is available."
+
 child-binding:
   description: "Mouse gesture definition"
   properties:
