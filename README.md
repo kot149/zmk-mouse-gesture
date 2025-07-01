@@ -69,32 +69,32 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
     // enable-8way; // Uncomment to enable 8-way gesture detection
 
     history_back {
-        gesture = <GESTURE_RIGHT>;
+        pattern = <GESTURE_RIGHT>;
         bindings = <&kp LA(LEFT)>;
     };
 
     history_forward {
-        gesture = <GESTURE_LEFT>;
+        pattern = <GESTURE_LEFT>;
         bindings = <&kp LA(RIGHT)>;
     };
 
     close_tab {
-        gesture = <GESTURE_DOWN GESTURE_RIGHT>;
+        pattern = <GESTURE_DOWN GESTURE_RIGHT>;
         bindings = <&kp LC(W)>;
     };
 
     new_tab {
-        gesture = <GESTURE_DOWN GESTURE_LEFT>;
+        pattern = <GESTURE_DOWN GESTURE_LEFT>;
         bindings = <&kp LC(T)>;
     };
 
     volume_up {
-        gesture = <GESTURE_DOWN_RIGHT GESTURE_LEFT GESTURE_UP_RIGHT>;
+        pattern = <GESTURE_DOWN_RIGHT GESTURE_LEFT GESTURE_UP_RIGHT>;
         bindings = <&kp C_VOLUME_UP>;
     };
 
     volume_down {
-        gesture = <GESTURE_DOWN_LEFT GESTURE_RIGHT GESTURE_UP_LEFT>;
+        pattern = <GESTURE_DOWN_LEFT GESTURE_RIGHT GESTURE_UP_LEFT>;
         bindings = <&kp C_VOLUME_DOWN>;
     };
 };

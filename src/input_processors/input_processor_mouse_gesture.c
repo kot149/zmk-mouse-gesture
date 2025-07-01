@@ -41,8 +41,8 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 struct gesture_pattern {
     size_t bindings_len;
     struct zmk_behavior_binding *bindings;
-    size_t gesture_len;
-    uint8_t gesture[];  // Variable length array at end
+    size_t pattern_len;
+    uint8_t pattern[];  // Variable length array at end
 };
 
 struct input_processor_mouse_gesture_config {
@@ -118,13 +118,13 @@ static struct gesture_pattern* check_and_process_pattern_locked(const struct dev
     for (size_t i = 0; i < config->pattern_count; i++) {
         const struct gesture_pattern *pattern = config->patterns[i];
 
-        if (pattern->gesture_len != data->sequence_len) {
+        if (pattern->pattern_len != data->sequence_len) {
             continue;
         }
 
         bool match = true;
-        for (size_t j = 0; j < pattern->gesture_len; j++) {
-            if (pattern->gesture[j] != data->sequence[j]) {
+        for (size_t j = 0; j < pattern->pattern_len; j++) {
+            if (pattern->pattern[j] != data->sequence[j]) {
                 match = false;
                 break;
             }
@@ -360,14 +360,14 @@ static struct zmk_input_processor_driver_api input_processor_mouse_gesture_drive
 // Gesture pattern instance creation
 #define GESTURE_PATTERN_INST(n)                                                                    \
     static struct zmk_behavior_binding                                                             \
-        gesture_pattern_config_##n##_bindings[DT_PROP_LEN(n, bindings)] =                         \
+        gesture_pattern_config_##n##_bindings[DT_PROP_LEN(n, bindings)] =                          \
             TRANSFORMED_BINDINGS(n);                                                               \
                                                                                                    \
     static struct gesture_pattern gesture_pattern_cfg_##n = {                                      \
         .bindings_len = DT_PROP_LEN(n, bindings),                                                  \
         .bindings = gesture_pattern_config_##n##_bindings,                                         \
-        .gesture_len = DT_PROP_LEN(n, gesture),                                                    \
-        .gesture = DT_PROP(n, gesture),                                                            \
+        .pattern_len = DT_PROP_LEN(n, pattern),                                                    \
+        .pattern = DT_PROP(n, pattern),                                                            \
     };
 
 // Apply to all child nodes

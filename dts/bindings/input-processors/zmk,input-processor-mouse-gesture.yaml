@@ -32,7 +32,7 @@ properties:
 child-binding:
   description: "Mouse gesture definition"
   properties:
-    gesture:
+    pattern:
       type: array
       required: true
       description: "Array of gesture directions that make up this gesture sequence"
