@@ -66,7 +66,7 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 
 &zip_mouse_gesture {
     stroke-size = <300>; // Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
-    // enable-8way; // Uncomment to enable 8-way gesture detection
+    enable-8way; // Comment out to disable 8-way gesture detection and limit to 4-way only
 
     history_back {
         pattern = <GESTURE_RIGHT>;
