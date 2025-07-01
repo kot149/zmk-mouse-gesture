@@ -276,13 +276,18 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     uint8_t direction = detect_direction(data->acc_x, data->acc_y, config->enable_8way);
 
     if (direction != GESTURE_NONE) {
-        // Add direction to sequence
-        if (data->sequence_len < MAX_GESTURE_SEQUENCE_LENGTH) {
-            data->sequence[data->sequence_len++] = direction;
-            LOG_DBG("Added direction %d to sequence (length: %d)", direction, data->sequence_len);
+        // Check for duplicate direction
+        if (data->sequence_len > 0 && data->sequence[data->sequence_len - 1] == direction) {
+            LOG_DBG("Ignoring duplicate direction %d", direction);
         } else {
-            LOG_WRN("Gesture sequence too long, clearing");
-            data->sequence_len = 0;
+            // Add direction to sequence
+            if (data->sequence_len < MAX_GESTURE_SEQUENCE_LENGTH) {
+                data->sequence[data->sequence_len++] = direction;
+                LOG_DBG("Added direction %d to sequence (length: %d)", direction, data->sequence_len);
+            } else {
+                LOG_WRN("Gesture sequence too long, clearing");
+                data->sequence_len = 0;
+            }
         }
 
         // Reset accumulation for next direction
