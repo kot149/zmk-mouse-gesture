@@ -5,9 +5,7 @@ A ZMK module that converts sequences of 8-way mouse strokes into key presses or 
 > [!warning]
 > 🚧 This module is still under development. 🚧
 >
-> The current implementation has a bug that causes the keyboard to crash.
->
-> Its behavior or API may change without notice.
+> Its behavior is not stable and may cause the keyboard to crash, or its behavior and API may change without notice.
 
 ## Installation
 
