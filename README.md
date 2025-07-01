@@ -5,7 +5,7 @@ A ZMK module that converts sequences of 8-way mouse strokes into key presses or 
 > [!warning]
 > 🚧 This module is still under development. 🚧
 >
-> Its behavior is not stable and may cause the keyboard to crash, or its behavior and API may change without notice.
+> Its behavior is not stable and may cause the keyboard to crash. Its behavior and API may change without notice.
 
 ## Installation
 
@@ -39,8 +39,8 @@ manifest:
 ```
 
 ### 2. Add activation key
-
 ```dts
+#include <mouse-gesture.dtsi>
 / {
     keymap {
         compatible = "zmk,keymap";
@@ -66,37 +66,31 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
     stroke-size = <1000>; // Size of one stroke in a gesture
     // enable-8way; // Uncomment to enable 8-way gesture detection
 
-    // Simple gesture for history back (Alt+Left)
     history_back {
         gesture = <GESTURE_RIGHT>;
         bindings = <&kp LA(LEFT)>;
     };
 
-    // Simple gesture for history forward (Alt+Right)
     history_forward {
         gesture = <GESTURE_LEFT>;
         bindings = <&kp LA(RIGHT)>;
     };
 
-    // Down then right gesture for close tab (Ctrl+W)
     close_tab {
         gesture = <GESTURE_DOWN GESTURE_RIGHT>;
         bindings = <&kp LC(W)>;
     };
 
-    // Down then left gesture for new tab (Ctrl+T)
     new_tab {
         gesture = <GESTURE_DOWN GESTURE_LEFT>;
         bindings = <&kp LC(T)>;
     };
 
-    // Clockwise triangle gesture for volume up
     volume_up {
         gesture = <GESTURE_DOWN_RIGHT GESTURE_LEFT GESTURE_UP_RIGHT>;
         bindings = <&kp C_VOLUME_UP>;
     };
 
-    // Anti-clockwise triangle gesture for volume down
     volume_down {
         gesture = <GESTURE_DOWN_LEFT GESTURE_RIGHT GESTURE_UP_LEFT>;
         bindings = <&kp C_VOLUME_DOWN>;
@@ -113,14 +107,16 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 
 #### Available Gesture Directions
 
-- `GESTURE_UP` - Upward movement
-- `GESTURE_DOWN` - Downward movement
-- `GESTURE_LEFT` - Leftward movement
-- `GESTURE_RIGHT` - Rightward movement
-- `GESTURE_UP_LEFT` - Diagonal up-left movement
-- `GESTURE_UP_RIGHT` - Diagonal up-right movement
-- `GESTURE_DOWN_LEFT` - Diagonal down-left movement
-- `GESTURE_DOWN_RIGHT` - Diagonal down-right movement
+- 4-way directions
+  - `GESTURE_UP` - Upward movement
+  - `GESTURE_DOWN` - Downward movement
+  - `GESTURE_LEFT` - Leftward movement
+  - `GESTURE_RIGHT` - Rightward movement
+- 8-way directions (optional)
+  - `GESTURE_UP_LEFT` - Diagonal up-left movement
+  - `GESTURE_UP_RIGHT` - Diagonal up-right movement
+  - `GESTURE_DOWN_LEFT` - Diagonal down-left movement
+  - `GESTURE_DOWN_RIGHT` - Diagonal down-right movement
 
 ### 5. Perform the gesture
 
@@ -133,3 +129,23 @@ When accumulated value become bigger than `stroke-size`, the processor judges it
 When matching gesture found for the sequence, its bindings will be invoked.
 The accumulated value is reset when the direction is detected or the activation key is released.
 The sequence is cleared when a gesture is detected or the activation key is released.
+
+## Related Works
+
+### zmk-input-processor-keybind (by [te9no](https://github.com/te9no/zmk-input-processor-keybind) and [zettaface](https://github.com/zettaface/zmk-input-processor-keybind))
+
+Converts mouse movement into key presses (e.g., arrow keys).
+
+While both keybind and mouse-gesture modules handle mouse move events and trigger behaviors, they serve different purposes:
+
+- **keybind**: Direct, continuous conversion of mouse movement to key presses
+- **mouse-gesture**: Pattern recognition that triggers single-shot behaviors based on gesture sequences
+
+### [input-processor-behaviors](https://zmk.dev/docs/keymaps/input-processors/behaviors)
+
+Official ZMK input processor that converts mouse button presses into behaviors.
+Unlike keybind and mouse-gesture modules, this feature is intended to process mouse button clicks rather than mouse movement; It does not quantize mouse movement or consider its direction.
+
+### [zmk-input-gestures](https://github.com/halfdane/zmk-input-gestures)
+
+Provides trackpad-specific gestures like tap-to-click, inertial scrolling, and circular scrolling. This module focuses on trackpad interactions rather than converting general mouse movement to behaviors.
