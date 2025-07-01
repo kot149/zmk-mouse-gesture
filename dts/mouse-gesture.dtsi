@@ -18,5 +18,24 @@
     /omit-if-no-ref/ mouse_gesture: mouse_gesture {
         compatible = "zmk,behavior-mouse-gesture";
         #binding-cells = <0>;
+        toggle-mode = "momentary";  // Hold to activate
+    };
+
+    /omit-if-no-ref/ mouse_gesture_toggle: mouse_gesture_toggle {
+        compatible = "zmk,behavior-mouse-gesture";
+        #binding-cells = <0>;
+        toggle-mode = "flip";  // Toggle on/off with each press
+    };
+
+    /omit-if-no-ref/ mouse_gesture_on: mouse_gesture_on {
+        compatible = "zmk,behavior-mouse-gesture";
+        #binding-cells = <0>;
+        toggle-mode = "on";    // Always enable
+    };
+
+    /omit-if-no-ref/ mouse_gesture_off: mouse_gesture_off {
+        compatible = "zmk,behavior-mouse-gesture";
+        #binding-cells = <0>;
+        toggle-mode = "off";   // Always disable
     };
 };

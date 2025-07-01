@@ -47,8 +47,10 @@ manifest:
 
         default_layer {
             bindings = <
-                // Activates mouse gesture while it is pressed
-                &mouse_gesture
+                &mouse_gesture // Activates mouse gesture while it is pressed
+                &mouse_gesture_on // Activates mouse gesture on each press
+                &mouse_gesture_off // Deactivates mouse gesture on each press
+                &mouse_gesture_toggle // Toggle mouse gesture on/off on each press
             >;
         };
     };
@@ -120,7 +122,15 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 
 ### 5. Perform the gesture
 
-Hold the activation key and perform the gesture.
+Activate gesture by pressing the activation key and perform the gesture.
+
+## Advanced Usage
+
+- **Automatic Activation**: use [zmk-listeners](https://github.com/ssbb/zmk-listeners) to activate the gesture automatically on specific layers
+
+- **Activate with existing keys**: use [zmk-listeners](https://github.com/ssbb/zmk-listeners) to activate the gesture with existing keys
+
+- **Layer-specific gestures**: define [layer-spesific input processors](https://zmk.dev/docs/keymaps/input-processors/usage#layer-specific-overrides) to trigger different gestures on different layers
 
 ## How it works
 
