@@ -66,6 +66,7 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 
 &zip_mouse_gesture {
     stroke-size = <1000>; // Size of one stroke in a gesture
+    // enable-8way; // Uncomment to enable 8-way gesture detection
 
     // Simple gesture for history back (Alt+Left)
     history_back {

@@ -12,6 +12,7 @@
         #input-processor-cells = <0>;
         stroke-size = <300>;
         movement-threshold = <10>;
+        // enable-8way;
     };
 
     /omit-if-no-ref/ mouse_gesture: mouse_gesture {

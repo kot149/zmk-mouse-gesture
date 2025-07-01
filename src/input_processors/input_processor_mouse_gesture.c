@@ -49,6 +49,7 @@ struct input_processor_mouse_gesture_config {
     uint32_t stroke_size;
     uint32_t movement_threshold;
     uint32_t gesture_cooldown_ms;  // Cooldown period between gestures
+    bool enable_8way;  // true: 8 directions, false: 4 directions only
     struct gesture_pattern **patterns;  // Array of pointers to patterns
     size_t pattern_count;
 };
@@ -73,16 +74,24 @@ struct input_processor_mouse_gesture_data {
     struct deferred_gesture_execution deferred_exec;  // Work queue item
 };
 
-static uint8_t detect_direction(int32_t x, int32_t y) {
+static uint8_t detect_direction(int32_t x, int32_t y, bool enable_8way) {
     uint16_t abs_x = ABS(x);
     uint16_t abs_y = ABS(y);
 
-    if (abs_x * 5 > abs_y * 12) {
-        return GESTURE_X(x);
-    } else if (abs_y * 5 > abs_x * 12) {
-        return GESTURE_Y(y);
+    if (enable_8way) {
+        if (abs_x * 5 > abs_y * 12) {
+            return GESTURE_X(x);
+        } else if (abs_y * 5 > abs_x * 12) {
+            return GESTURE_Y(y);
+        } else {
+            return GESTURE_XY(x, y);
+        }
     } else {
-        return GESTURE_XY(x, y);
+        if (abs_x > abs_y) {
+            return GESTURE_X(x);
+        } else {
+            return GESTURE_Y(y);
+        }
     }
 
     return GESTURE_NONE;
@@ -264,7 +273,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
-    uint8_t direction = detect_direction(data->acc_x, data->acc_y);
+    uint8_t direction = detect_direction(data->acc_x, data->acc_y, config->enable_8way);
 
     if (direction != GESTURE_NONE) {
         // Add direction to sequence
@@ -375,6 +384,7 @@ static struct gesture_pattern *gesture_patterns[] = {DT_INST_FOREACH_CHILD(0, GE
         .stroke_size = DT_INST_PROP_OR(n, stroke_size, 1000),                       \
         .movement_threshold = DT_INST_PROP_OR(n, movement_threshold, 10),           \
         .gesture_cooldown_ms = DT_INST_PROP_OR(n, gesture_cooldown_ms, 200),        \
+        .enable_8way = DT_INST_PROP_OR(n, enable_8way, false),                      \
         .patterns = gesture_patterns,                                               \
         .pattern_count = PATTERN_COUNT,                                             \
     };                                                                              \
