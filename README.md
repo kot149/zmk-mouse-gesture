@@ -1,6 +1,6 @@
 # ZMK Mouse Gesture Module
 
-A ZMK module that converts combinations of 8-way mouse strokes into key presses or any other behaviors.
+A ZMK module that converts combinations of 4-direction mouse strokes into key presses or any other behaviors.
 
 > [!warning]
 > 🚧 This module is still under development. 🚧
