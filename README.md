@@ -159,4 +159,4 @@ Unlike keybind and mouse-gesture modules, this feature is intended to process mo
 
 ### [zmk-input-gestures](https://github.com/halfdane/zmk-input-gestures)
 
-Provides trackpad-specific gestures like tap-to-click, inertial scrolling, and circular scrolling. This module focuses on trackpad interactions rather than converting general mouse movement to behaviors.
+Provides trackpad-specific gestures like tap-to-click, inertial cursor, and circular scrolling. This module focuses on trackpad interactions rather than converting general mouse movement to behaviors.
