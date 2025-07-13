@@ -67,7 +67,6 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 
 &zip_mouse_gesture {
     stroke-size = <300>; // Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
-    enable-8way; // Comment out to disable 8-way gesture detection and limit to 4-way only
 
     history_back {
         pattern = <GESTURE_RIGHT>;
@@ -88,16 +87,6 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
         pattern = <GESTURE_DOWN GESTURE_LEFT>;
         bindings = <&kp LC(T)>;
     };
-
-    volume_up {
-        pattern = <GESTURE_DOWN_RIGHT GESTURE_LEFT GESTURE_UP_RIGHT>;
-        bindings = <&kp C_VOLUME_UP>;
-    };
-
-    volume_down {
-        pattern = <GESTURE_DOWN_LEFT GESTURE_RIGHT GESTURE_UP_LEFT>;
-        bindings = <&kp C_VOLUME_DOWN>;
-    };
 };
 
 &trackball_listener {
@@ -107,19 +96,6 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
     input-processors = <&zip_mouse_gesture>;
 };
 ```
-
-#### Available Gesture Directions
-
-- 4-way directions
-  - `GESTURE_UP` - Upward movement
-  - `GESTURE_DOWN` - Downward movement
-  - `GESTURE_LEFT` - Leftward movement
-  - `GESTURE_RIGHT` - Rightward movement
-- 8-way directions (optional)
-  - `GESTURE_UP_LEFT` - Diagonal up-left movement
-  - `GESTURE_UP_RIGHT` - Diagonal up-right movement
-  - `GESTURE_DOWN_LEFT` - Diagonal down-left movement
-  - `GESTURE_DOWN_RIGHT` - Diagonal down-right movement
 
 ### 5. Perform the gesture
 
