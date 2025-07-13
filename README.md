@@ -67,6 +67,7 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 
 &zip_mouse_gesture {
     stroke-size = <300>; // Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
+    enable-eager-mode; // Optional: Execute bindings immediately when gesture pattern is matched. When not specified, bindings are executed when gesture recognition becomes inactive.
 
     history_back {
         pattern = <GESTURE_RIGHT>;
@@ -113,7 +114,19 @@ Activate gesture by pressing the activation key and perform the gesture.
 
 While `&mouse_gesture` is pressed, `&zip_mouse_gesture` listens to mouse input events and accumulates the movement value.
 When accumulated value become bigger than `stroke-size`, the processor judges its direction, then pushes it to mouse gesture sequence.
-When matching gesture found for the sequence, its bindings will be invoked.
+When matching gesture found for the sequence, its bindings will be invoked according to the configured execution mode:
+
+**Default Mode (enable-eager-mode NOT specified):**
+- Pattern matching and binding execution occur only when gesture recognition becomes inactive (i.e., when the activation key is released)
+- This allows you to perform complex gesture sequences without interruption
+- The complete accumulated gesture sequence is evaluated at the end
+
+**Eager Mode (enable-eager-mode specified):**
+- Pattern matching occurs in real-time during gesture input
+- Bindings are executed immediately when a gesture pattern is matched
+- This provides instant feedback and faster gesture execution, but increases computational cost
+- Complex gesture may be interrupted by smaller one
+
 The accumulated value is reset when the direction is detected or the activation key is released.
 The sequence is cleared when a gesture is detected or the activation key is released.
 

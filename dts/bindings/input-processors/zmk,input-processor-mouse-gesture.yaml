@@ -25,6 +25,10 @@ properties:
     default: 10
     description: "Threshold for each x/y event"
 
+  enable-eager-mode:
+    type: boolean
+    description: "Execute bindings immediately when gesture pattern is matched. When false, bindings are executed when gesture recognition becomes inactive."
+
 child-binding:
   description: "Mouse gesture definition"
   properties:

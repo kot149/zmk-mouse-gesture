@@ -49,6 +49,7 @@ struct input_processor_mouse_gesture_config {
     uint32_t stroke_size;
     uint32_t movement_threshold;
     uint32_t gesture_cooldown_ms;  // Cooldown period between gestures
+    bool enable_eager_mode;  // Execute bindings immediately when gesture pattern is matched
     struct gesture_pattern **patterns;  // Array of pointers to patterns
     size_t pattern_count;
 };
@@ -291,6 +292,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
                                                       uint32_t param1, uint32_t param2,
                                                       struct zmk_input_processor_state *state) {
     struct input_processor_mouse_gesture_data *data = dev->data;
+    const struct input_processor_mouse_gesture_config *config = dev->config;
     int ret = 0;
 
     // Single mutex operation - acquire, process, check pattern, release
@@ -302,16 +304,18 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
 
     ret = input_processor_mouse_gesture_handle_event_locked(dev, event, param1, param2, state);
 
-    // Check for pattern match and update state atomically
-    struct gesture_pattern *matched_pattern = check_and_process_pattern_locked(dev);
+    // Only check for pattern match in eager mode
+    if (config->enable_eager_mode) {
+        struct gesture_pattern *matched_pattern = check_and_process_pattern_locked(dev);
+        if (matched_pattern) {
+            k_mutex_unlock(&data->lock);
+            LOG_DBG("Pattern matched in eager mode, scheduling immediate execution");
+            schedule_gesture_execution(dev, matched_pattern);
+            return ret;
+        }
+    }
 
     k_mutex_unlock(&data->lock);
-
-    // Schedule pattern execution via work queue (deadlock-safe)
-    if (matched_pattern) {
-        LOG_DBG("Pattern matched, scheduling deferred execution");
-        schedule_gesture_execution(dev, matched_pattern);
-    }
 
     return ret;
 }
@@ -367,6 +371,7 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
     }
 
     struct input_processor_mouse_gesture_data *data = dev->data;
+    const struct input_processor_mouse_gesture_config *config = dev->config;
 
     // Update state with mutex protection
     int ret = k_mutex_lock(&data->lock, K_MSEC(10));
@@ -378,10 +383,27 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
     bool old_state = data->is_active;
     data->is_active = ev->is_active;
 
-    // Clear gesture data when state changes (especially when deactivating)
-    if (old_state != ev->is_active) {
+    // When gesture becomes inactive, check for pattern match in non-eager mode
+    if (old_state && !ev->is_active) {
+        LOG_INF("Mouse gesture state changed: ACTIVE -> INACTIVE");
+        
+        if (!config->enable_eager_mode) {
+            // Check for pattern match on deactivation in non-eager mode
+            struct gesture_pattern *matched_pattern = check_and_process_pattern_locked(dev);
+            if (matched_pattern) {
+                k_mutex_unlock(&data->lock);
+                LOG_DBG("Pattern matched on gesture deactivation, scheduling execution");
+                schedule_gesture_execution(dev, matched_pattern);
+                return ZMK_EV_EVENT_BUBBLE;
+            }
+        }
+        
+        // Clear gesture data when deactivating
         clear_gesture_data_locked(data);
-        LOG_INF("Mouse gesture state changed: %s", ev->is_active ? "ACTIVE" : "INACTIVE");
+    } else if (!old_state && ev->is_active) {
+        LOG_INF("Mouse gesture state changed: INACTIVE -> ACTIVE");
+        // Clear gesture data when activating
+        clear_gesture_data_locked(data);
     }
 
     k_mutex_unlock(&data->lock);
@@ -430,6 +452,7 @@ static struct gesture_pattern *gesture_patterns[] = {DT_INST_FOREACH_CHILD(0, GE
         .stroke_size = DT_INST_PROP_OR(n, stroke_size, 1000),                       \
         .movement_threshold = DT_INST_PROP_OR(n, movement_threshold, 10),           \
         .gesture_cooldown_ms = DT_INST_PROP_OR(n, gesture_cooldown_ms, 200),        \
+        .enable_eager_mode = DT_INST_PROP_OR(n, enable_eager_mode, false),          \
         .patterns = gesture_patterns,                                               \
         .pattern_count = PATTERN_COUNT,                                             \
     };                                                                              \
