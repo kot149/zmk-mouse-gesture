@@ -1,6 +1,6 @@
 # ZMK Mouse Gesture Module
 
-A ZMK module that converts sequences of 8-way mouse strokes into key presses or any other behaviors.
+A ZMK module that converts combinations of 8-way mouse strokes into key presses or any other behaviors.
 
 > [!warning]
 > 🚧 This module is still under development. 🚧
@@ -41,6 +41,7 @@ manifest:
 ### 2. Add activation key
 ```dts
 #include <mouse-gesture.dtsi>
+
 / {
     keymap {
         compatible = "zmk,keymap";
@@ -57,7 +58,7 @@ manifest:
 };
 ```
 
-### 3. Configure Input Listener
+### 3. Configure Input Processor
 
 Define the gesture patterns in `&zip_mouse_gesture`and add it to the input processor of your pointing device.
 
