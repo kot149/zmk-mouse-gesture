@@ -13,6 +13,7 @@
 
 #include <zmk/behavior.h>
 #include <dt-bindings/zmk/mouse-gesture.h>
+#include <zmk/events/mouse_gesture_state_changed.h>
 
 enum toggle_mode {
     TOGGLE_MODE_ON,
@@ -33,13 +34,10 @@ struct behavior_mouse_gesture_data {
     bool is_active;
 };
 
-static struct behavior_mouse_gesture_data global_gesture_state = {
-    .is_active = false
-};
-
-// Public function to get gesture state
-bool zmk_mouse_gesture_is_active(void) {
-    return global_gesture_state.is_active;
+static void raise_state_change_event(bool is_active) {
+    raise_zmk_mouse_gesture_state_changed((struct zmk_mouse_gesture_state_changed){
+        .is_active = is_active
+    });
 }
 
 static int behavior_mouse_gesture_init(const struct device *dev) {
@@ -55,39 +53,37 @@ static int on_keymap_binding_pressed(struct zmk_behavior_binding *binding,
     const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
     struct behavior_mouse_gesture_data *data = dev->data;
     const struct behavior_mouse_gesture_config *config = dev->config;
-    
+
     // Use configured toggle mode
+    bool new_state = data->is_active;
+
     switch (config->toggle_mode) {
         case TOGGLE_MODE_ON:
             LOG_DBG("Mouse gesture enabled");
-            data->is_active = true;
-            global_gesture_state.is_active = true;
+            new_state = true;
             break;
-            
+
         case TOGGLE_MODE_OFF:
             LOG_DBG("Mouse gesture disabled");
-            data->is_active = false;
-            global_gesture_state.is_active = false;
+            new_state = false;
             break;
-            
+
         case TOGGLE_MODE_MOMENTARY:
             LOG_DBG("Mouse gesture activated (momentary)");
-            data->is_active = true;
-            global_gesture_state.is_active = true;
+            new_state = true;
             break;
-            
+
         case TOGGLE_MODE_FLIP:
         default:
-            if (global_gesture_state.is_active) {
-                LOG_DBG("Mouse gesture toggled OFF");
-                data->is_active = false;
-                global_gesture_state.is_active = false;
-            } else {
-                LOG_DBG("Mouse gesture toggled ON");
-                data->is_active = true;
-                global_gesture_state.is_active = true;
-            }
+            new_state = !data->is_active;
+            LOG_DBG("Mouse gesture toggled %s", new_state ? "ON" : "OFF");
             break;
+    }
+
+    // Update state and raise event if changed
+    if (data->is_active != new_state) {
+        data->is_active = new_state;
+        raise_state_change_event(new_state);
     }
 
     return ZMK_BEHAVIOR_OPAQUE;
@@ -98,12 +94,12 @@ static int on_keymap_binding_released(struct zmk_behavior_binding *binding,
     const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
     struct behavior_mouse_gesture_data *data = dev->data;
     const struct behavior_mouse_gesture_config *config = dev->config;
-    
+
     // Only deactivate for momentary mode on release
-    if (config->toggle_mode == TOGGLE_MODE_MOMENTARY) {
+    if (config->toggle_mode == TOGGLE_MODE_MOMENTARY && data->is_active) {
         LOG_DBG("Mouse gesture deactivated (momentary release)");
         data->is_active = false;
-        global_gesture_state.is_active = false;
+        raise_state_change_event(false);
     }
     // For other toggle modes, release events are ignored
 

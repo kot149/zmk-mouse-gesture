@@ -22,7 +22,7 @@
 #include <zmk/behavior.h>
 #include <zmk/behavior_queue.h>
 #include <drivers/behavior.h>
-#include <zmk/mouse_gesture.h>
+#include <zmk/events/mouse_gesture_state_changed.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -64,6 +64,7 @@ struct deferred_gesture_execution {
 
 struct input_processor_mouse_gesture_data {
     struct k_mutex lock;
+    bool is_active;
     int32_t acc_x;
     int32_t acc_y;
     uint8_t sequence[MAX_GESTURE_SEQUENCE_LENGTH];
@@ -242,7 +243,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     }
 
     // Check if mouse gesture is active (early exit)
-    if (!zmk_mouse_gesture_is_active()) {
+    if (!data->is_active) {
         data->acc_x = 0;
         data->acc_y = 0;
         data->sequence_len = 0;
@@ -333,6 +334,7 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
 
     k_mutex_init(&data->lock);
 
+    data->is_active = false;
     data->acc_x = 0;
     data->acc_y = 0;
     data->sequence_len = 0;
@@ -346,6 +348,58 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
 
     LOG_INF("Mouse gesture input processor initialized with deferred execution");
     return 0;
+}
+
+// Clear gesture data when gesture state changes (called while mutex is held)
+static void clear_gesture_data_locked(struct input_processor_mouse_gesture_data *data) {
+    data->acc_x = 0;
+    data->acc_y = 0;
+    data->sequence_len = 0;
+    LOG_DBG("Gesture data cleared");
+}
+
+// Event listener for mouse gesture state changes
+static int mouse_gesture_state_listener(const zmk_event_t *eh) {
+    struct zmk_mouse_gesture_state_changed *ev = as_zmk_mouse_gesture_state_changed(eh);
+    if (ev == NULL) {
+        return ZMK_EV_EVENT_BUBBLE;
+    }
+
+    // Find the first input processor device instance
+    const struct device *dev = NULL;
+
+    // This is a simplified approach - in a production system you might want to
+    // iterate through all instances or use a device registry
+    #if DT_NODE_EXISTS(DT_DRV_INST(0))
+    dev = DEVICE_DT_INST_GET(0);
+    #endif
+
+    if (dev == NULL) {
+        LOG_WRN("No mouse gesture input processor device found");
+        return ZMK_EV_EVENT_BUBBLE;
+    }
+
+    struct input_processor_mouse_gesture_data *data = dev->data;
+
+    // Update state with mutex protection
+    int ret = k_mutex_lock(&data->lock, K_MSEC(10));
+    if (ret < 0) {
+        LOG_WRN("Failed to acquire mutex for state change: %d", ret);
+        return ZMK_EV_EVENT_BUBBLE;
+    }
+
+    bool old_state = data->is_active;
+    data->is_active = ev->is_active;
+
+    // Clear gesture data when state changes (especially when deactivating)
+    if (old_state != ev->is_active) {
+        clear_gesture_data_locked(data);
+        LOG_INF("Mouse gesture state changed: %s", ev->is_active ? "ACTIVE" : "INACTIVE");
+    }
+
+    k_mutex_unlock(&data->lock);
+
+    return ZMK_EV_EVENT_BUBBLE;
 }
 
 
@@ -400,5 +454,9 @@ static struct gesture_pattern *gesture_patterns[] = {DT_INST_FOREACH_CHILD(0, GE
                           &input_processor_mouse_gesture_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(MOUSE_GESTURE_INPUT_PROCESSOR_INST)
+
+// Register event listener
+ZMK_LISTENER(mouse_gesture_input_processor, mouse_gesture_state_listener);
+ZMK_SUBSCRIPTION(mouse_gesture_input_processor, zmk_mouse_gesture_state_changed);
 
 #endif
