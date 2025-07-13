@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 if(CONFIG_ZMK_MOUSE_GESTURE)
-  zephyr_library()
-  zephyr_library_include_directories(include)
-  zephyr_library_sources(src/behaviors/behavior_mouse_gesture.c)
-  zephyr_library_sources(src/input_processors/input_processor_mouse_gesture.c)
+  target_sources_ifdef(CONFIG_ZMK_MOUSE_GESTURE app PRIVATE 
+    src/behaviors/behavior_mouse_gesture.c
+    src/input_processors/input_processor_mouse_gesture.c
+  )
+  target_include_directories(app PRIVATE include)
 endif()
