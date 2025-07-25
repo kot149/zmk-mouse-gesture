@@ -84,6 +84,7 @@ struct input_processor_mouse_gesture_data {
 
 // Forward declarations
 static void schedule_gesture_execution(const struct device *dev, struct gesture_pattern *pattern);
+static void clear_gesture_data_locked(struct input_processor_mouse_gesture_data *data);
 
 static uint8_t detect_direction(int32_t x, int32_t y) {
 
@@ -134,8 +135,7 @@ static struct gesture_pattern* check_and_process_pattern_locked(const struct dev
 
             // Update all state atomically - no separate flag reset needed
             data->last_gesture_time = current_time;
-            data->sequence_len = 0;  // Clear sequence
-            // Note: NOT setting gesture_in_progress to true - keep it simple
+            clear_gesture_data_locked(data);
 
             return (struct gesture_pattern*)pattern;
         }
