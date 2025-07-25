@@ -98,7 +98,7 @@ static uint8_t detect_direction(int32_t x, int32_t y) {
 }
 
 // Check if pattern matches and update state atomically (called while mutex is held)
-static struct gesture_pattern* check_and_process_pattern_locked(const struct device *dev) {
+static struct gesture_pattern* match_gesture_pattern_locked(const struct device *dev) {
     const struct input_processor_mouse_gesture_config *config = dev->config;
     struct input_processor_mouse_gesture_data *data = dev->data;
     int64_t current_time = k_uptime_get();
@@ -208,7 +208,7 @@ static void idle_timeout_work_handler(struct k_work *work) {
     LOG_INF("Idle timeout triggered, checking for gesture pattern match");
 
     // Check for pattern match and execute if found
-    struct gesture_pattern *matched_pattern = check_and_process_pattern_locked(dev);
+    struct gesture_pattern *matched_pattern = match_gesture_pattern_locked(dev);
     k_mutex_unlock(&data->lock);
 
     if (matched_pattern) {
@@ -391,7 +391,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
 
     // Only check for pattern match in eager mode
     if (config->enable_eager_mode) {
-        struct gesture_pattern *matched_pattern = check_and_process_pattern_locked(dev);
+        struct gesture_pattern *matched_pattern = match_gesture_pattern_locked(dev);
         if (matched_pattern) {
             k_mutex_unlock(&data->lock);
             LOG_DBG("Pattern matched in eager mode, scheduling immediate execution");
@@ -481,7 +481,7 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
 
         if (!config->enable_eager_mode) {
             // Check for pattern match on deactivation in non-eager mode
-            struct gesture_pattern *matched_pattern = check_and_process_pattern_locked(dev);
+            struct gesture_pattern *matched_pattern = match_gesture_pattern_locked(dev);
             if (matched_pattern) {
                 k_mutex_unlock(&data->lock);
                 LOG_DBG("Pattern matched on gesture deactivation, scheduling execution");
