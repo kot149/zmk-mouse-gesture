@@ -55,8 +55,8 @@ struct input_processor_mouse_gesture_config {
     size_t pattern_count;
 };
 
-// Deferred execution data
-struct deferred_gesture_execution {
+// Deferred behavior execution data
+struct deferred_behavior_execution {
     struct k_work work;
     struct zmk_behavior_binding bindings[MAX_DEFERRED_BINDINGS];
     size_t binding_count;
@@ -73,7 +73,7 @@ struct input_processor_mouse_gesture_data {
     int64_t last_gesture_time;  // Timestamp of last gesture execution
     uint32_t event_count;       // Counter to detect potential loops
     int64_t last_reset_time;    // Time of last counter reset
-    struct deferred_gesture_execution deferred_exec;  // Work queue item
+    struct deferred_behavior_execution deferred_exec;  // Work queue item
     struct k_work_delayable idle_timeout_work;  // Work queue item for idle timeout
     int64_t last_movement_time;  // Timestamp of last mouse movement
 };
@@ -140,11 +140,11 @@ static struct gesture_pattern* check_and_process_pattern_locked(const struct dev
     return NULL;
 }
 
-// Work queue handler for deferred gesture execution
-static void deferred_gesture_work_handler(struct k_work *work) {
-    struct deferred_gesture_execution *exec = CONTAINER_OF(work, struct deferred_gesture_execution, work);
+// Work queue handler for deferred behavior execution
+static void deferred_behavior_work_handler(struct k_work *work) {
+    struct deferred_behavior_execution *exec = CONTAINER_OF(work, struct deferred_behavior_execution, work);
 
-    LOG_DBG("Executing deferred gesture with %zu bindings", exec->binding_count);
+    LOG_DBG("Executing deferred behavior with %zu bindings", exec->binding_count);
 
     // Execute behaviors in work queue context (safe from deadlock)
     for (size_t k = 0; k < exec->binding_count; k++) {
@@ -162,7 +162,7 @@ static void deferred_gesture_work_handler(struct k_work *work) {
         }
     }
 
-    LOG_DBG("Deferred gesture execution completed");
+    LOG_DBG("Deferred behavior execution completed");
 }
 
 // Work queue handler for idle timeout gesture execution
@@ -222,7 +222,7 @@ static void schedule_gesture_execution(const struct device *dev, struct gesture_
     }
 
     struct input_processor_mouse_gesture_data *data = dev->data;
-    struct deferred_gesture_execution *exec = &data->deferred_exec;
+    struct deferred_behavior_execution *exec = &data->deferred_exec;
 
     // Prevent work queue overflow
     if (pattern->bindings_len > MAX_DEFERRED_BINDINGS) {
@@ -421,7 +421,7 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     data->last_reset_time = k_uptime_get();
 
     // Initialize work queue for deferred execution
-    k_work_init(&data->deferred_exec.work, deferred_gesture_work_handler);
+    k_work_init(&data->deferred_exec.work, deferred_behavior_work_handler);
     data->deferred_exec.binding_count = 0;
 
     // Initialize idle timeout work
