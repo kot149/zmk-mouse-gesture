@@ -88,6 +88,8 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
     new_tab {
         pattern = <GESTURE_DOWN GESTURE_LEFT>;
         bindings = <&kp LC(T)>;
+        wait-ms = <20>;  // Optional: wait time between behaviors (default: CONFIG_ZMK_MACRO_DEFAULT_WAIT_MS)
+        tap-ms = <40>;   // Optional: press duration for each behavior (default: CONFIG_ZMK_MACRO_DEFAULT_TAP_MS)
     };
 };
 
@@ -104,7 +106,6 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 - `stroke-size`: Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
 - `enable-eager-mode`: Execute bindings immediately when gesture pattern is matched. When not set, bindings are executed when activation key is released.
 - `idle-timeout-ms`: Time in milliseconds to wait for idle before invoking gesture. When set to 0 (default), idle timeout is disabled. This can invoke gesture earlier than the release of activation key when eager mode is not enabled.
-
 
 ### 5. Perform the gesture
 

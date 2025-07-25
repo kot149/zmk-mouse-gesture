@@ -42,6 +42,8 @@ struct gesture_pattern {
     size_t bindings_len;
     struct zmk_behavior_binding *bindings;
     size_t pattern_len;
+    uint32_t wait_ms;
+    uint32_t tap_ms;
     uint8_t pattern[];  // Variable length array at end
 };
 
@@ -61,6 +63,8 @@ struct deferred_behavior_execution {
     struct zmk_behavior_binding bindings[MAX_DEFERRED_BINDINGS];
     size_t binding_count;
     struct zmk_behavior_binding_event event;
+    uint32_t wait_ms;
+    uint32_t tap_ms;
 };
 
 struct input_processor_mouse_gesture_data {
@@ -148,15 +152,16 @@ static void deferred_behavior_work_handler(struct k_work *work) {
 
     // Execute behaviors in work queue context (safe from deadlock)
     for (size_t k = 0; k < exec->binding_count; k++) {
-        LOG_DBG("Executing deferred binding [%zu/%zu]", k + 1, exec->binding_count);
+        LOG_DBG("Executing deferred binding [%zu/%zu] with wait-ms=%d, tap-ms=%d", 
+                k + 1, exec->binding_count, exec->wait_ms, exec->tap_ms);
 
-        int ret = zmk_behavior_queue_add(&exec->event, exec->bindings[k], true, k * 30);
+        int ret = zmk_behavior_queue_add(&exec->event, exec->bindings[k], true, k * exec->wait_ms);
         if (ret < 0) {
             LOG_ERR("Failed to queue deferred press event [%zu]: %d", k, ret);
             continue;
         }
 
-        ret = zmk_behavior_queue_add(&exec->event, exec->bindings[k], false, (k * 30) + 80);
+        ret = zmk_behavior_queue_add(&exec->event, exec->bindings[k], false, (k * exec->wait_ms) + exec->tap_ms);
         if (ret < 0) {
             LOG_ERR("Failed to queue deferred release event [%zu]: %d", k, ret);
         }
@@ -233,6 +238,8 @@ static void schedule_gesture_execution(const struct device *dev, struct gesture_
     // Setup execution data
     exec->binding_count = MIN(pattern->bindings_len, MAX_DEFERRED_BINDINGS);
     memcpy(exec->bindings, pattern->bindings, exec->binding_count * sizeof(struct zmk_behavior_binding));
+    exec->wait_ms = pattern->wait_ms;
+    exec->tap_ms = pattern->tap_ms;
 
     exec->event.position = INT32_MAX;
     exec->event.timestamp = k_uptime_get();
@@ -525,6 +532,8 @@ static struct zmk_input_processor_driver_api input_processor_mouse_gesture_drive
         .bindings_len = DT_PROP_LEN(n, bindings),                                                  \
         .bindings = gesture_pattern_config_##n##_bindings,                                         \
         .pattern_len = DT_PROP_LEN(n, pattern),                                                    \
+        .wait_ms = DT_PROP_OR(n, wait_ms, CONFIG_ZMK_MACRO_DEFAULT_WAIT_MS),                       \
+        .tap_ms = DT_PROP_OR(n, tap_ms, CONFIG_ZMK_MACRO_DEFAULT_TAP_MS),                         \
         .pattern = DT_PROP(n, pattern),                                                            \
     };
 

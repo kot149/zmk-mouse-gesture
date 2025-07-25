@@ -46,3 +46,11 @@ child-binding:
       type: phandle-array
       required: true
       description: "Behaviors to be invoked when this gesture is detected"
+
+    wait-ms:
+      type: int
+      description: "Time in milliseconds to wait between consecutive behavior invocations in the gesture sequence"
+
+    tap-ms:
+      type: int
+      description: "Time in milliseconds between press and release events for each behavior in the gesture sequence"
