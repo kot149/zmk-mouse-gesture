@@ -228,6 +228,12 @@ static void schedule_gesture_execution(const struct device *dev, struct gesture_
     struct input_processor_mouse_gesture_data *data = dev->data;
     struct deferred_behavior_execution *exec = &data->deferred_behavior_exec;
 
+    // Prevent scheduling multiple gestures while the previous one is still executing
+    if (k_work_is_pending(&exec->work) || k_work_busy_get(&exec->work) != 0) {
+        LOG_WRN("Deferred gesture work already pending/running, skipping new schedule");
+        return;
+    }
+
     // Prevent work queue overflow
     if (pattern->bindings_len > MAX_DEFERRED_BINDINGS) {
         LOG_WRN("Too many bindings to defer (%zu > %d), truncating",
