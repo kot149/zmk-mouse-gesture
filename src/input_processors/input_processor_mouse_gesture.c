@@ -152,7 +152,7 @@ static void deferred_behavior_work_handler(struct k_work *work) {
 
     // Execute behaviors in work queue context (safe from deadlock)
     for (size_t k = 0; k < exec->binding_count; k++) {
-        LOG_DBG("Executing deferred binding [%zu/%zu] with wait-ms=%d, tap-ms=%d", 
+        LOG_DBG("Executing deferred binding [%zu/%zu] with wait-ms=%d, tap-ms=%d",
                 k + 1, exec->binding_count, exec->wait_ms, exec->tap_ms);
 
         int ret = zmk_behavior_queue_add(&exec->event, exec->bindings[k], true, k * exec->wait_ms);
@@ -193,9 +193,8 @@ static void idle_timeout_work_handler(struct k_work *work) {
     }
 
     // Acquire mutex to check state and execute pattern
-    int ret = k_mutex_lock(&data->lock, K_MSEC(10));
-    if (ret < 0) {
-        LOG_WRN("Failed to acquire mutex for idle timeout: %d", ret);
+    if (k_mutex_lock(&data->lock, K_NO_WAIT) != 0) {
+        LOG_WRN("Idle timeout mutex busy, skipping");
         return;
     }
 
@@ -323,13 +322,10 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
 
     // Start/restart idle timeout if configured and not in eager mode
     if (config->idle_timeout_ms > 0 && !config->enable_eager_mode && data->sequence_len > 0) {
-        // Cancel any existing idle timeout
-        k_work_cancel_delayable(&data->idle_timeout_work);
-
-        // Start new idle timeout
-        int ret = k_work_schedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
+        // Reschedule idle timeout efficiently (avoids cancel+schedule loop)
+        int ret = k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
         if (ret < 0) {
-            LOG_WRN("Failed to schedule idle timeout work: %d", ret);
+            LOG_WRN("Failed to reschedule idle timeout work: %d", ret);
         } else {
             LOG_DBG("Idle timeout scheduled for %d ms", config->idle_timeout_ms);
         }
@@ -356,13 +352,10 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
 
                 // Start idle timeout if configured and not in eager mode and this is the first direction
                 if (config->idle_timeout_ms > 0 && !config->enable_eager_mode && data->sequence_len == 1) {
-                    // Cancel any existing idle timeout
-                    k_work_cancel_delayable(&data->idle_timeout_work);
-
-                    // Start new idle timeout
-                    int ret = k_work_schedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
+                    // Reschedule idle timeout efficiently
+                    int ret = k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
                     if (ret < 0) {
-                        LOG_WRN("Failed to schedule idle timeout work: %d", ret);
+                        LOG_WRN("Failed to reschedule idle timeout work: %d", ret);
                     } else {
                         LOG_DBG("Idle timeout scheduled for %d ms after first direction", config->idle_timeout_ms);
                     }
@@ -390,9 +383,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
     int ret = 0;
 
     // Single mutex operation - acquire, process, check pattern, release
-    ret = k_mutex_lock(&data->lock, K_MSEC(5));
-    if (ret < 0) {
-        LOG_WRN("Failed to acquire mutex for gesture processing: %d", ret);
+    if (k_mutex_lock(&data->lock, K_NO_WAIT) != 0) {
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
@@ -476,9 +467,8 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
     const struct input_processor_mouse_gesture_config *config = dev->config;
 
     // Update state with mutex protection
-    int ret = k_mutex_lock(&data->lock, K_MSEC(10));
-    if (ret < 0) {
-        LOG_WRN("Failed to acquire mutex for state change: %d", ret);
+    int ret = k_mutex_lock(&data->lock, K_NO_WAIT);
+    if (ret != 0) {
         return ZMK_EV_EVENT_BUBBLE;
     }
 
