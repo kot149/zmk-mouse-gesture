@@ -77,7 +77,7 @@ struct input_processor_mouse_gesture_data {
     int64_t last_gesture_time;  // Timestamp of last gesture execution
     uint32_t event_count;       // Counter to detect potential loops
     int64_t last_reset_time;    // Time of last counter reset
-    struct deferred_behavior_execution deferred_exec;  // Work queue item
+    struct deferred_behavior_execution deferred_behavior_exec;  // Work queue item
     struct k_work_delayable idle_timeout_work;  // Work queue item for idle timeout
     int64_t last_movement_time;  // Timestamp of last mouse movement
 };
@@ -226,7 +226,7 @@ static void schedule_gesture_execution(const struct device *dev, struct gesture_
     }
 
     struct input_processor_mouse_gesture_data *data = dev->data;
-    struct deferred_behavior_execution *exec = &data->deferred_exec;
+    struct deferred_behavior_execution *exec = &data->deferred_behavior_exec;
 
     // Prevent work queue overflow
     if (pattern->bindings_len > MAX_DEFERRED_BINDINGS) {
@@ -419,8 +419,8 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     data->last_reset_time = k_uptime_get();
 
     // Initialize work queue for deferred execution
-    k_work_init(&data->deferred_exec.work, deferred_behavior_work_handler);
-    data->deferred_exec.binding_count = 0;
+    k_work_init(&data->deferred_behavior_exec.work, deferred_behavior_work_handler);
+    data->deferred_behavior_exec.binding_count = 0;
 
     // Initialize idle timeout work
     k_work_init_delayable(&data->idle_timeout_work, idle_timeout_work_handler);
