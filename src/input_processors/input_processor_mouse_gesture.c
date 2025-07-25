@@ -392,12 +392,15 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
     // Only check for pattern match in eager mode
     if (config->enable_eager_mode) {
         struct gesture_pattern *matched_pattern = match_gesture_pattern_locked(dev);
+        k_mutex_unlock(&data->lock);
+
         if (matched_pattern) {
-            k_mutex_unlock(&data->lock);
             LOG_DBG("Pattern matched in eager mode, scheduling immediate execution");
             schedule_gesture_execution(dev, matched_pattern);
             return ret;
         }
+
+        return ret;
     }
 
     k_mutex_unlock(&data->lock);
