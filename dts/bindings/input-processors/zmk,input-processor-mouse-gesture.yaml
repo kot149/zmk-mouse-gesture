@@ -29,6 +29,11 @@ properties:
     type: boolean
     description: "Execute bindings immediately when gesture pattern is matched. When false, bindings are executed when gesture recognition becomes inactive."
 
+  idle-timeout-ms:
+    type: int
+    default: 0
+    description: "Time in milliseconds to wait for idle before invoking gesture. When set to 0 (default), idle timeout is disabled. This can invoke gesture earlier than the release of activation key when eager mode is not enabled."
+
 child-binding:
   description: "Mouse gesture definition"
   properties:
