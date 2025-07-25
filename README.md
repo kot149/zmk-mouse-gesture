@@ -66,8 +66,9 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 #include <mouse-gesture.dtsi>
 
 &zip_mouse_gesture {
-    stroke-size = <300>; // Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
-    enable-eager-mode; // Optional: Execute bindings immediately when gesture pattern is matched. When not specified, bindings are executed when gesture recognition becomes inactive.
+    // stroke-size = <300>;
+    // enable-eager-mode;
+    // idle-timeout-ms = <1000>;
 
     history_back {
         pattern = <GESTURE_RIGHT>;
@@ -87,6 +88,8 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
     new_tab {
         pattern = <GESTURE_DOWN GESTURE_LEFT>;
         bindings = <&kp LC(T)>;
+        wait-ms = <20>;  // Optional: wait time between behaviors (default: CONFIG_ZMK_MACRO_DEFAULT_WAIT_MS)
+        tap-ms = <40>;   // Optional: press duration for each behavior (default: CONFIG_ZMK_MACRO_DEFAULT_TAP_MS)
     };
 };
 
@@ -97,6 +100,12 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
     input-processors = <&zip_mouse_gesture>;
 };
 ```
+
+#### Options
+
+- `stroke-size`: Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
+- `enable-eager-mode`: Execute bindings immediately when gesture pattern is matched. When not set, bindings are executed when activation key is released.
+- `idle-timeout-ms`: Time in milliseconds to wait for idle before invoking gesture. When set to 0 (default), idle timeout is disabled. This can invoke gesture earlier than the release of activation key when eager mode is not enabled.
 
 ### 5. Perform the gesture
 
@@ -127,8 +136,14 @@ When matching gesture found for the sequence, its bindings will be invoked accor
 - This provides instant feedback and faster gesture execution, but increases computational cost
 - Complex gesture may be interrupted by smaller one
 
+**Idle Timeout Mode (idle-timeout-ms > 0 and enable-eager-mode NOT specified):**
+- Pattern matching and binding execution occur when mouse movement becomes idle for the specified duration
+- This allows gesture execution without releasing the activation key, useful for continuous gesture operations
+- The idle timer is reset on each mouse movement and starts after the first gesture direction is detected
+- Provides a middle ground between default mode and eager mode
+
 The accumulated value is reset when the direction is detected or the activation key is released.
-The sequence is cleared when a gesture is detected or the activation key is released.
+The sequence is cleared when a gesture is detected, idle timeout triggers, or the activation key is released.
 
 ## Related Works
 
