@@ -80,6 +80,7 @@ struct input_processor_mouse_gesture_data {
     struct deferred_behavior_execution deferred_behavior_exec;  // Work queue item
     struct k_work_delayable idle_timeout_work;  // Work queue item for idle timeout
     int64_t last_movement_time;  // Timestamp of last mouse movement
+    const struct device *dev;  // Back-reference to device for safe work handler access
 };
 
 // Forward declarations
@@ -176,19 +177,10 @@ static void idle_timeout_work_handler(struct k_work *work) {
     struct input_processor_mouse_gesture_data *data = CONTAINER_OF(delayed_work,
         struct input_processor_mouse_gesture_data, idle_timeout_work);
 
-    // Find the device from the data structure
-    // This is a bit tricky - we need to iterate through all devices to find the matching one
-    const struct device *dev = NULL;
-
-    #if DT_NODE_EXISTS(DT_DRV_INST(0))
-    const struct device *candidate_dev = DEVICE_DT_INST_GET(0);
-    if (candidate_dev && candidate_dev->data == data) {
-        dev = candidate_dev;
-    }
-    #endif
-
+    // Use back-reference to device for safe access
+    const struct device *dev = data->dev;
     if (dev == NULL) {
-        LOG_ERR("Could not find device for idle timeout handler");
+        LOG_ERR("Device back-reference is NULL in idle timeout handler");
         return;
     }
 
@@ -434,6 +426,9 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     // Initialize idle timeout work
     k_work_init_delayable(&data->idle_timeout_work, idle_timeout_work_handler);
     data->last_movement_time = 0;
+
+    // Set device back-reference for safe access in work handlers
+    data->dev = dev;
 
     LOG_INF("Mouse gesture input processor initialized with deferred execution");
     return 0;
