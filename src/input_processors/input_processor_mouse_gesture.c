@@ -184,8 +184,7 @@ static void idle_timeout_work_handler(struct k_work *work) {
         return;
     }
 
-    // Acquire mutex to check state and execute pattern
-    if (k_mutex_lock(&data->lock, K_NO_WAIT) != 0) {
+    if (k_mutex_lock(&data->lock, K_MSEC(100)) != 0) {
         LOG_WRN("Idle timeout mutex busy, skipping");
         return;
     }
