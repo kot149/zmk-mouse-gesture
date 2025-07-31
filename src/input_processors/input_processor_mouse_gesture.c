@@ -458,7 +458,8 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
     const struct input_processor_mouse_gesture_config *config = dev->config;
 
     // Update state with mutex protection
-    int ret = k_mutex_lock(&data->lock, K_NO_WAIT);
+    // Longer timeout for state changes
+    int ret = k_mutex_lock(&data->lock, K_MSEC(250));
     if (ret != 0) {
         return ZMK_EV_EVENT_BUBBLE;
     }
