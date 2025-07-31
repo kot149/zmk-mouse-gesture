@@ -98,9 +98,8 @@ static uint8_t detect_direction(int32_t x, int32_t y) {
     return GESTURE_NONE;
 }
 
-// Check if pattern matches (should be called while mutex is held)
-// Clears gesture data if matched
-static struct gesture_pattern* match_gesture_pattern_locked(const struct device *dev) {
+// Check if pattern matches and clears gesture data (should be called while mutex is held)
+static struct gesture_pattern* match_gesture_pattern_locked(const struct device *dev, bool clear_even_if_not_matched) {
     const struct input_processor_mouse_gesture_config *config = dev->config;
     struct input_processor_mouse_gesture_data *data = dev->data;
     int64_t current_time = k_uptime_get();
@@ -138,8 +137,14 @@ static struct gesture_pattern* match_gesture_pattern_locked(const struct device 
             data->last_gesture_time = current_time;
             clear_gesture_data_locked(data);
 
+            schedule_gesture_execution(dev, pattern);
+
             return (struct gesture_pattern*)pattern;
         }
+    }
+
+    if (clear_even_if_not_matched) {
+        clear_gesture_data_locked(data);
     }
 
     return NULL;
@@ -198,15 +203,9 @@ static void idle_timeout_work_handler(struct k_work *work) {
     LOG_INF("Idle timeout triggered, checking for gesture pattern match");
 
     // Check for pattern match and execute if found
-    struct gesture_pattern *matched_pattern = match_gesture_pattern_locked(dev);
-    k_mutex_unlock(&data->lock);
+    match_gesture_pattern_locked(dev, true);
 
-    if (matched_pattern) {
-        LOG_DBG("Pattern matched on idle timeout, scheduling execution");
-        schedule_gesture_execution(dev, matched_pattern);
-    } else {
-        LOG_DBG("No pattern matched on idle timeout");
-    }
+    k_mutex_unlock(&data->lock);
 }
 
 // Schedule gesture execution via work queue
@@ -386,16 +385,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
 
     // Real-time pattern match in eager mode
     if (config->enable_eager_mode) {
-        struct gesture_pattern *matched_pattern = match_gesture_pattern_locked(dev);
-        k_mutex_unlock(&data->lock);
-
-        if (matched_pattern) {
-            LOG_DBG("Pattern matched in eager mode, scheduling immediate execution");
-            schedule_gesture_execution(dev, matched_pattern);
-            return ret;
-        }
-
-        return ret;
+        match_gesture_pattern_locked(dev, false);
     }
 
     k_mutex_unlock(&data->lock);
@@ -482,17 +472,11 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
 
         if (!config->enable_eager_mode) {
             // Check for pattern match on deactivation in non-eager mode
-            struct gesture_pattern *matched_pattern = match_gesture_pattern_locked(dev);
-            if (matched_pattern) {
-                k_mutex_unlock(&data->lock);
-                LOG_DBG("Pattern matched on gesture deactivation, scheduling execution");
-                schedule_gesture_execution(dev, matched_pattern);
-                return ZMK_EV_EVENT_BUBBLE;
-            }
+            match_gesture_pattern_locked(dev, true);
+        } else {
+            // clear gesture data if in eager mode
+            clear_gesture_data_locked(data);
         }
-
-        // Clear gesture data when deactivating
-        clear_gesture_data_locked(data);
     } else if (!old_state && ev->is_active) {
         LOG_INF("Mouse gesture state changed: INACTIVE -> ACTIVE");
         // Clear gesture data when activating
