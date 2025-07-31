@@ -26,9 +26,6 @@
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
-#define IDLE_THREAD_STACK_SIZE 512
-#define IDLE_THREAD_PRIORITY K_PRIO_COOP(7)
-
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
 #define ABS(x) ((x) < 0 ? -(x) : (x))
@@ -39,6 +36,59 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define MAX_GESTURE_SEQUENCE_LENGTH 8
 #define MAX_GESTURE_PATTERNS 16
 #define MAX_DEFERRED_BINDINGS 8
+
+/* Message queue definitions for gesture execution */
+#define GESTURE_EXEC_MAX_EVENTS 8
+
+struct gesture_exec_msg {
+    size_t binding_count;
+    struct zmk_behavior_binding bindings[MAX_DEFERRED_BINDINGS];
+    uint32_t wait_ms;
+    uint32_t tap_ms;
+};
+
+K_MSGQ_DEFINE(gesture_exec_msgq, sizeof(struct gesture_exec_msg), GESTURE_EXEC_MAX_EVENTS, 4);
+
+static void gesture_exec_work_cb(struct k_work *work);
+static K_WORK_DEFINE(gesture_exec_work, gesture_exec_work_cb);
+
+/* Work handler that drains the gesture execution message queue and
+ * schedules behavior press/release events on the ZMK behavior queue.
+ */
+static void gesture_exec_work_cb(struct k_work *work) {
+    ARG_UNUSED(work);
+
+    struct gesture_exec_msg msg;
+
+    while (k_msgq_get(&gesture_exec_msgq, &msg, K_NO_WAIT) == 0) {
+        struct zmk_behavior_binding_event event = {
+            .position = INT32_MAX,
+            .timestamp = k_uptime_get(),
+#if IS_ENABLED(CONFIG_ZMK_SPLIT)
+            .source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL,
+#endif
+        };
+
+        LOG_DBG("Gesture exec work: processing %zu bindings (wait=%d tap=%d)",
+                msg.binding_count, msg.wait_ms, msg.tap_ms);
+
+        for (size_t k = 0; k < msg.binding_count; k++) {
+            int ret = zmk_behavior_queue_add(&event, msg.bindings[k], true, k * msg.wait_ms);
+            if (ret < 0) {
+                LOG_ERR("Failed to queue press event %zu: %d", k, ret);
+                continue;
+            }
+
+            ret = zmk_behavior_queue_add(&event, msg.bindings[k], false,
+                                         (k * msg.wait_ms) + msg.tap_ms);
+            if (ret < 0) {
+                LOG_ERR("Failed to queue release event %zu: %d", k, ret);
+            }
+        }
+    }
+}
+
+
 
 struct gesture_pattern {
     size_t bindings_len;
@@ -59,14 +109,7 @@ struct input_processor_mouse_gesture_config {
     size_t pattern_count;
 };
 
-struct deferred_behavior_execution {
-    struct k_work work;
-    struct zmk_behavior_binding bindings[MAX_DEFERRED_BINDINGS];
-    size_t binding_count;
-    struct zmk_behavior_binding_event event;
-    uint32_t wait_ms;
-    uint32_t tap_ms;
-};
+
 
 struct input_processor_mouse_gesture_data {
     struct k_mutex lock;
@@ -78,13 +121,10 @@ struct input_processor_mouse_gesture_data {
     int64_t last_gesture_time;  // Timestamp of last gesture execution; used for cooldown period
     uint32_t event_count;       // Counter to detect potential loops
     int64_t last_reset_time;    // Time of last counter reset; used for event loop detection
-    struct deferred_behavior_execution deferred_behavior_exec;  // Work queue item
     struct k_work_delayable idle_timeout_work;  // Work queue item for idle timeout
     int64_t last_movement_time;  // Timestamp of last mouse movement; used for idle timeout
     const struct device *dev;  // Back-reference to device for safe work handler access
-    struct k_sem idle_sem;
-    struct k_thread idle_thread;
-    K_THREAD_STACK_MEMBER(idle_stack, IDLE_THREAD_STACK_SIZE);
+
 };
 
 static void schedule_gesture_execution(const struct device *dev, const struct gesture_pattern *pattern);
@@ -152,53 +192,28 @@ static struct gesture_pattern* match_gesture_pattern_locked(const struct device 
     return NULL;
 }
 
-static void deferred_behavior_work_handler(struct k_work *work) {
-    struct deferred_behavior_execution *exec = CONTAINER_OF(work, struct deferred_behavior_execution, work);
 
-    LOG_DBG("Executing deferred behavior with %zu bindings", exec->binding_count);
-
-    // Execute behaviors in work queue context
-    for (size_t k = 0; k < exec->binding_count; k++) {
-        LOG_DBG("Executing deferred binding [%zu/%zu] with wait-ms=%d, tap-ms=%d",
-                k + 1, exec->binding_count, exec->wait_ms, exec->tap_ms);
-
-        int ret = zmk_behavior_queue_add(&exec->event, exec->bindings[k], true, k * exec->wait_ms);
-        if (ret < 0) {
-            LOG_ERR("Failed to queue deferred press event [%zu]: %d", k, ret);
-            continue;
-        }
-
-        ret = zmk_behavior_queue_add(&exec->event, exec->bindings[k], false, (k * exec->wait_ms) + exec->tap_ms);
-        if (ret < 0) {
-            LOG_ERR("Failed to queue deferred release event [%zu]: %d", k, ret);
-        }
-    }
-
-    LOG_DBG("Deferred behavior execution completed");
-}
 
 // Work queue handler for idle timeout gesture execution
 static void idle_timeout_work_handler(struct k_work *work) {
     struct k_work_delayable *delayed_work = k_work_delayable_from_work(work);
     struct input_processor_mouse_gesture_data *data =
         CONTAINER_OF(delayed_work, struct input_processor_mouse_gesture_data, idle_timeout_work);
-    k_sem_give(&data->idle_sem);
-}
 
-// Dedicated thread function for idle-timeout matching
-static void idle_thread_fn(void *arg1, void *arg2, void *arg3) {
-    const struct device *dev = arg1;
-    struct input_processor_mouse_gesture_data *data = dev->data;
-    while (1) {
-        k_sem_take(&data->idle_sem, K_FOREVER);
-        if (k_mutex_lock(&data->lock, K_MSEC(100)) == 0) {
-            if (data->is_active && data->sequence_len > 0) {
-                match_gesture_pattern_locked(dev, true);
-            }
-            k_mutex_unlock(&data->lock);
+    const struct device *dev = data->dev;
+    if (!dev) {
+        return;
+    }
+
+    /* Directly attempt to match gesture pattern instead of waking a dedicated thread */
+    if (k_mutex_lock(&data->lock, K_MSEC(50)) == 0) {
+        if (data->is_active && data->sequence_len > 0) {
+            match_gesture_pattern_locked(dev, true);
         }
+        k_mutex_unlock(&data->lock);
     }
 }
+
 
 // Schedule gesture execution via work queue
 static void schedule_gesture_execution(const struct device *dev, const struct gesture_pattern *pattern) {
@@ -206,40 +221,22 @@ static void schedule_gesture_execution(const struct device *dev, const struct ge
         return;
     }
 
-    struct input_processor_mouse_gesture_data *data = dev->data;
-    struct deferred_behavior_execution *exec = &data->deferred_behavior_exec;
+    /* Build execution message */
+    struct gesture_exec_msg msg = {0};
+    msg.binding_count = MIN(pattern->bindings_len, MAX_DEFERRED_BINDINGS);
+    memcpy(msg.bindings, pattern->bindings,
+           msg.binding_count * sizeof(struct zmk_behavior_binding));
+    msg.wait_ms = pattern->wait_ms;
+    msg.tap_ms = pattern->tap_ms;
 
-    // Prevent scheduling multiple gestures while the previous one is still executing
-    if (k_work_is_pending(&exec->work) || k_work_busy_get(&exec->work) != 0) {
-        LOG_WRN("Deferred gesture work already pending/running, skipping new schedule");
+    int ret = k_msgq_put(&gesture_exec_msgq, &msg, K_NO_WAIT);
+    if (ret < 0) {
+        LOG_WRN("Gesture execution queue full – gesture dropped (len=%zu)", msg.binding_count);
         return;
     }
 
-    // Prevent work queue overflow
-    if (pattern->bindings_len > MAX_DEFERRED_BINDINGS) {
-        LOG_WRN("Too many bindings to defer (%zu > %d), truncating",
-                pattern->bindings_len, MAX_DEFERRED_BINDINGS);
-    }
-
-    // Setup execution data
-    exec->binding_count = MIN(pattern->bindings_len, MAX_DEFERRED_BINDINGS);
-    memcpy(exec->bindings, pattern->bindings, exec->binding_count * sizeof(struct zmk_behavior_binding));
-    exec->wait_ms = pattern->wait_ms;
-    exec->tap_ms = pattern->tap_ms;
-
-    exec->event.position = INT32_MAX;
-    exec->event.timestamp = k_uptime_get();
-#if IS_ENABLED(CONFIG_ZMK_SPLIT)
-    exec->event.source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL;
-#endif
-
-    // Submit to system work queue
-    int ret = k_work_submit(&exec->work);
-    if (ret < 0) {
-        LOG_ERR("Failed to submit gesture work: %d", ret);
-    } else {
-        LOG_DBG("Gesture execution scheduled successfully");
-    }
+    /* Ensure work item runs */
+    k_work_submit(&gesture_exec_work);
 }
 
 // Safe accumulation with overflow protection
@@ -371,7 +368,8 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
-    if (k_mutex_lock(&data->lock, K_NO_WAIT) != 0) {
+    if (k_mutex_lock(&data->lock, K_MSEC(10)) != 0) {
+        /* Couldn't obtain lock within 10 ms – skip for now */
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
@@ -402,17 +400,11 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     data->event_count = 0;
     data->last_reset_time = k_uptime_get();
 
-    // Initialize work queue for deferred execution
-    k_work_init(&data->deferred_behavior_exec.work, deferred_behavior_work_handler);
-    data->deferred_behavior_exec.binding_count = 0;
 
     // Initialize idle timeout work
     k_work_init_delayable(&data->idle_timeout_work, idle_timeout_work_handler);
     data->last_movement_time = 0;
-    k_sem_init(&data->idle_sem, 0, 1);
-    k_thread_create(&data->idle_thread, data->idle_stack, IDLE_THREAD_STACK_SIZE,
-                    idle_thread_fn, (void *)dev, NULL, NULL,
-                    IDLE_THREAD_PRIORITY, 0, K_NO_WAIT);
+
     // Set device back-reference for access in work handlers
     data->dev = dev;
 
