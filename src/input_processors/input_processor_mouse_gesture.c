@@ -26,6 +26,9 @@
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
+#define IDLE_THREAD_STACK_SIZE 512
+#define IDLE_THREAD_PRIORITY K_PRIO_COOP(7)
+
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
 #define ABS(x) ((x) < 0 ? -(x) : (x))
@@ -81,6 +84,9 @@ struct input_processor_mouse_gesture_data {
     struct k_work_delayable idle_timeout_work;  // Work queue item for idle timeout
     int64_t last_movement_time;  // Timestamp of last mouse movement; used for idle timeout
     const struct device *dev;  // Back-reference to device for safe work handler access
+    struct k_sem idle_sem;
+    struct k_thread idle_thread;
+    K_THREAD_STACK_MEMBER(idle_stack, IDLE_THREAD_STACK_SIZE);
 };
 
 // Forward declarations
@@ -179,33 +185,24 @@ static void deferred_behavior_work_handler(struct k_work *work) {
 // Work queue handler for idle timeout gesture execution
 static void idle_timeout_work_handler(struct k_work *work) {
     struct k_work_delayable *delayed_work = k_work_delayable_from_work(work);
-    struct input_processor_mouse_gesture_data *data = CONTAINER_OF(delayed_work,
-        struct input_processor_mouse_gesture_data, idle_timeout_work);
+    struct input_processor_mouse_gesture_data *data =
+        CONTAINER_OF(delayed_work, struct input_processor_mouse_gesture_data, idle_timeout_work);
+    k_sem_give(&data->idle_sem);
+}
 
-    const struct device *dev = data->dev;
-    if (dev == NULL) {
-        LOG_ERR("Device back-reference is NULL in idle timeout handler");
-        return;
+// Add dedicated thread function for idle-timeout matching
+static void idle_thread_fn(void *arg1, void *arg2, void *arg3) {
+    const struct device *dev = arg1;
+    struct input_processor_mouse_gesture_data *data = dev->data;
+    while (1) {
+        k_sem_take(&data->idle_sem, K_FOREVER);
+        if (k_mutex_lock(&data->lock, K_MSEC(100)) == 0) {
+            if (data->is_active && data->sequence_len > 0) {
+                match_gesture_pattern_locked(dev, true);
+            }
+            k_mutex_unlock(&data->lock);
+        }
     }
-
-    if (k_mutex_lock(&data->lock, K_MSEC(100)) != 0) {
-        LOG_WRN("Idle timeout mutex busy, skipping");
-        return;
-    }
-
-    // Only execute if still active and we have a sequence
-    if (!data->is_active || data->sequence_len == 0) {
-        k_mutex_unlock(&data->lock);
-        LOG_DBG("Idle timeout triggered but no gesture sequence to execute");
-        return;
-    }
-
-    LOG_INF("Idle timeout triggered, checking for gesture pattern match");
-
-    // Check for pattern match and execute if found
-    match_gesture_pattern_locked(dev, true);
-
-    k_mutex_unlock(&data->lock);
 }
 
 // Schedule gesture execution via work queue
@@ -413,7 +410,10 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     // Initialize idle timeout work
     k_work_init_delayable(&data->idle_timeout_work, idle_timeout_work_handler);
     data->last_movement_time = 0;
-
+    k_sem_init(&data->idle_sem, 0, 1);
+    k_thread_create(&data->idle_thread, data->idle_stack, IDLE_THREAD_STACK_SIZE,
+                    idle_thread_fn, (void *)dev, NULL, NULL,
+                    IDLE_THREAD_PRIORITY, 0, K_NO_WAIT);
     // Set device back-reference for access in work handlers
     data->dev = dev;
 
