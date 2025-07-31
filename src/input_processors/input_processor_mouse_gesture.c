@@ -79,7 +79,7 @@ K_MSGQ_DEFINE(mouse_rel_msgq, sizeof(struct mouse_rel_msg), MOUSE_REL_MSG_QUEUE_
 
 struct gesture_pattern {
     size_t bindings_len;
-    struct zmk_behavior_binding *bindings;
+    const struct zmk_behavior_binding *bindings;
     size_t pattern_len;
     uint32_t wait_ms;
     uint32_t tap_ms;
@@ -92,7 +92,7 @@ struct input_processor_mouse_gesture_config {
     uint32_t gesture_cooldown_ms;  // Cooldown period between gestures
     bool enable_eager_mode;  // Execute bindings immediately when gesture pattern is matched
     uint32_t idle_timeout_ms;  // Time to wait for idle before invoking gesture
-    struct gesture_pattern **patterns;  // Array of pointers to patterns
+    const struct gesture_pattern *const *patterns;  // Array of pointers to patterns
     size_t pattern_count;
 };
 
@@ -127,7 +127,7 @@ static uint8_t detect_direction(int32_t x, int32_t y) {
 }
 
 // Check if pattern matches and clears gesture data (should be called while mutex is held)
-static struct gesture_pattern* match_gesture_pattern_locked(const struct device *dev, bool clear_even_if_not_matched) {
+static const struct gesture_pattern *match_gesture_pattern_locked(const struct device *dev, bool clear_even_if_not_matched) {
     const struct input_processor_mouse_gesture_config *config = dev->config;
     struct input_processor_mouse_gesture_data *data = dev->data;
     int64_t current_time = k_uptime_get();
@@ -166,7 +166,7 @@ static struct gesture_pattern* match_gesture_pattern_locked(const struct device 
 
             schedule_gesture_execution(dev, pattern);
 
-            return (struct gesture_pattern*)pattern;
+            return pattern;
         }
     }
 
@@ -503,7 +503,7 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
     return ZMK_EV_EVENT_BUBBLE;
 }
 
-static struct zmk_input_processor_driver_api input_processor_mouse_gesture_driver_api = {
+static const struct zmk_input_processor_driver_api input_processor_mouse_gesture_driver_api = {
     .handle_event = input_processor_mouse_gesture_handle_event,
 };
 
@@ -511,11 +511,11 @@ static struct zmk_input_processor_driver_api input_processor_mouse_gesture_drive
     { LISTIFY(DT_PROP_LEN(n, bindings), ZMK_KEYMAP_EXTRACT_BINDING, (, ), n) }
 
 #define GESTURE_PATTERN_INST(n)                                                                    \
-    static struct zmk_behavior_binding                                                             \
+    static const struct zmk_behavior_binding                                                             \
         gesture_pattern_config_##n##_bindings[DT_PROP_LEN(n, bindings)] =                          \
             TRANSFORMED_BINDINGS(n);                                                               \
                                                                                                    \
-    static struct gesture_pattern gesture_pattern_cfg_##n = {                                      \
+    static const struct gesture_pattern gesture_pattern_cfg_##n = {                                      \
         .bindings_len = DT_PROP_LEN(n, bindings),                                                  \
         .bindings = gesture_pattern_config_##n##_bindings,                                         \
         .pattern_len = DT_PROP_LEN(n, pattern),                                                    \
@@ -531,14 +531,14 @@ DT_INST_FOREACH_CHILD(0, GESTURE_PATTERN_INST)
 #define GESTURE_PATTERN_ITEM(n) &gesture_pattern_cfg_##n,
 #define GESTURE_PATTERN_UTIL_ONE(n) 1 +
 
-static struct gesture_pattern *gesture_patterns[] = {DT_INST_FOREACH_CHILD(0, GESTURE_PATTERN_ITEM)};
+static const struct gesture_pattern *gesture_patterns[] = {DT_INST_FOREACH_CHILD(0, GESTURE_PATTERN_ITEM)};
 
 #define PATTERN_COUNT (DT_INST_FOREACH_CHILD(0, GESTURE_PATTERN_UTIL_ONE) 0)
 
 #define MOUSE_GESTURE_INPUT_PROCESSOR_INST(n)                                       \
     static struct input_processor_mouse_gesture_data                                \
         input_processor_mouse_gesture_data_##n = {};                                \
-    static struct input_processor_mouse_gesture_config                              \
+    static const struct input_processor_mouse_gesture_config                              \
         input_processor_mouse_gesture_config_##n = {                                \
         .stroke_size = DT_INST_PROP_OR(n, stroke_size, 1000),                       \
         .movement_threshold = DT_INST_PROP_OR(n, movement_threshold, 10),           \
