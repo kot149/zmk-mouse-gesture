@@ -529,11 +529,10 @@ DT_INST_FOREACH_CHILD(0, GESTURE_PATTERN_INST)
 
 // Create array of pattern pointers
 #define GESTURE_PATTERN_ITEM(n) &gesture_pattern_cfg_##n,
-#define GESTURE_PATTERN_UTIL_ONE(n) 1 +
 
 static const struct gesture_pattern *gesture_patterns[] = {DT_INST_FOREACH_CHILD(0, GESTURE_PATTERN_ITEM)};
 
-#define PATTERN_COUNT (DT_INST_FOREACH_CHILD(0, GESTURE_PATTERN_UTIL_ONE) 0)
+#define PATTERN_COUNT (ARRAY_SIZE(gesture_patterns))
 
 #define MOUSE_GESTURE_INPUT_PROCESSOR_INST(n)                                       \
     static struct input_processor_mouse_gesture_data                                \
