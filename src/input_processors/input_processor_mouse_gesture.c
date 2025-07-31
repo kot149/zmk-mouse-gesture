@@ -28,6 +28,11 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
+/* Global pointer to the first gesture processor device so that work
+ * handler can access runtime data without costly lookups.
+ */
+static const struct device *gesture_dev = NULL;
+
 #define ABS(x) ((x) < 0 ? -(x) : (x))
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -49,44 +54,29 @@ struct gesture_exec_msg {
 
 K_MSGQ_DEFINE(gesture_exec_msgq, sizeof(struct gesture_exec_msg), GESTURE_EXEC_MAX_EVENTS, 4);
 
+/* Forward declaration for locked event handler */
+static int input_processor_mouse_gesture_handle_event_locked(const struct device *dev,
+                                                             struct input_event *event,
+                                                             uint32_t param1, uint32_t param2,
+                                                             struct zmk_input_processor_state *state);
+
 static void gesture_exec_work_cb(struct k_work *work);
 static K_WORK_DEFINE(gesture_exec_work, gesture_exec_work_cb);
 
-/* Work handler that drains the gesture execution message queue and
- * schedules behavior press/release events on the ZMK behavior queue.
- */
-static void gesture_exec_work_cb(struct k_work *work) {
-    ARG_UNUSED(work);
+/* State change message queue */
+struct state_action_msg {
+    bool activate;
+};
+K_MSGQ_DEFINE(state_action_msgq, sizeof(struct state_action_msg), 8, 4);
 
-    struct gesture_exec_msg msg;
+/* Mouse relative movement message queue */
+struct mouse_rel_msg {
+    uint16_t code;
+    int32_t value;
+};
+#define MOUSE_REL_MSG_QUEUE_LEN 32
+K_MSGQ_DEFINE(mouse_rel_msgq, sizeof(struct mouse_rel_msg), MOUSE_REL_MSG_QUEUE_LEN, 4);
 
-    while (k_msgq_get(&gesture_exec_msgq, &msg, K_NO_WAIT) == 0) {
-        struct zmk_behavior_binding_event event = {
-            .position = INT32_MAX,
-            .timestamp = k_uptime_get(),
-#if IS_ENABLED(CONFIG_ZMK_SPLIT)
-            .source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL,
-#endif
-        };
-
-        LOG_DBG("Gesture exec work: processing %zu bindings (wait=%d tap=%d)",
-                msg.binding_count, msg.wait_ms, msg.tap_ms);
-
-        for (size_t k = 0; k < msg.binding_count; k++) {
-            int ret = zmk_behavior_queue_add(&event, msg.bindings[k], true, k * msg.wait_ms);
-            if (ret < 0) {
-                LOG_ERR("Failed to queue press event %zu: %d", k, ret);
-                continue;
-            }
-
-            ret = zmk_behavior_queue_add(&event, msg.bindings[k], false,
-                                         (k * msg.wait_ms) + msg.tap_ms);
-            if (ret < 0) {
-                LOG_ERR("Failed to queue release event %zu: %d", k, ret);
-            }
-        }
-    }
-}
 
 
 
@@ -214,6 +204,74 @@ static void idle_timeout_work_handler(struct k_work *work) {
     }
 }
 
+
+/* Primary work handler processing message queues */
+static void gesture_exec_work_cb(struct k_work *work) {
+    ARG_UNUSED(work);
+
+    const struct device *dev = gesture_dev;
+    if (!dev) {
+        return;
+    }
+    struct input_processor_mouse_gesture_data *data = dev->data;
+
+    /* -------- 1. State changes & mouse movements (with lock) -------- */
+    if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
+        struct state_action_msg s_msg;
+        while (k_msgq_get(&state_action_msgq, &s_msg, K_NO_WAIT) == 0) {
+            bool old_state = data->is_active;
+            data->is_active = s_msg.activate;
+            if (old_state && !s_msg.activate) {
+                match_gesture_pattern_locked(dev, true);
+            } else if (!old_state && s_msg.activate) {
+                clear_gesture_data_locked(data);
+            }
+        }
+
+        struct mouse_rel_msg m_msg;
+        while (k_msgq_get(&mouse_rel_msgq, &m_msg, K_NO_WAIT) == 0) {
+            struct input_event ev = {
+                .type = INPUT_EV_REL,
+                .code = m_msg.code,
+                .value = m_msg.value,
+            };
+            input_processor_mouse_gesture_handle_event_locked(dev, &ev, 0, 0, NULL);
+            if (((struct input_processor_mouse_gesture_config *)dev->config)->enable_eager_mode) {
+                match_gesture_pattern_locked(dev, false);
+            }
+        }
+        k_mutex_unlock(&data->lock);
+    }
+
+    /* -------- 2. Gesture execution -------- */
+    struct gesture_exec_msg g_msg;
+    while (k_msgq_get(&gesture_exec_msgq, &g_msg, K_NO_WAIT) == 0) {
+        struct zmk_behavior_binding_event event = {
+            .position = INT32_MAX,
+            .timestamp = k_uptime_get(),
+#if IS_ENABLED(CONFIG_ZMK_SPLIT)
+            .source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL,
+#endif
+        };
+        for (size_t k = 0; k < g_msg.binding_count; k++) {
+            int ret = zmk_behavior_queue_add(&event, g_msg.bindings[k], true, k * g_msg.wait_ms);
+            if (ret < 0) {
+                LOG_ERR("Failed to queue press event %zu: %d", k, ret);
+                continue;
+            }
+            ret = zmk_behavior_queue_add(&event, g_msg.bindings[k], false, (k * g_msg.wait_ms) + g_msg.tap_ms);
+            if (ret < 0) {
+                LOG_ERR("Failed to queue release event %zu: %d", k, ret);
+            }
+        }
+    }
+
+    if (k_msgq_num_used_get(&state_action_msgq) > 0 ||
+        k_msgq_num_used_get(&mouse_rel_msgq) > 0 ||
+        k_msgq_num_used_get(&gesture_exec_msgq) > 0) {
+        k_work_submit(&gesture_exec_work);
+    }
+}
 
 // Schedule gesture execution via work queue
 static void schedule_gesture_execution(const struct device *dev, const struct gesture_pattern *pattern) {
@@ -359,34 +417,42 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
                                                       struct input_event *event,
                                                       uint32_t param1, uint32_t param2,
                                                       struct zmk_input_processor_state *state) {
-    struct input_processor_mouse_gesture_data *data = dev->data;
+    ARG_UNUSED(param1);
+    ARG_UNUSED(param2);
+    ARG_UNUSED(state);
+
+    /* Only care about REL_X / REL_Y events */
+    if (!(event->type == INPUT_EV_REL &&
+          (event->code == INPUT_REL_X || event->code == INPUT_REL_Y))) {
+        return ZMK_INPUT_PROC_CONTINUE;
+    }
+
+    /* Ignore small movements here – same check will run later under lock but reduces queue spam */
     const struct input_processor_mouse_gesture_config *config = dev->config;
-    int ret = 0;
-
-    // Skip processing until initialization is complete
-    if (data->dev == NULL) {
+    if (ABS(event->value) < config->movement_threshold) {
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
-    if (k_mutex_lock(&data->lock, K_MSEC(10)) != 0) {
-        /* Couldn't obtain lock within 10 ms – skip for now */
-        return ZMK_INPUT_PROC_CONTINUE;
+    struct mouse_rel_msg msg = {
+        .code = event->code,
+        .value = event->value,
+    };
+
+    if (k_msgq_put(&mouse_rel_msgq, &msg, K_NO_WAIT) != 0) {
+        /* Queue full – drop smallest importance events */
+        LOG_WRN("Mouse rel queue full – movement dropped");
     }
 
-    ret = input_processor_mouse_gesture_handle_event_locked(dev, event, param1, param2, state);
+    k_work_submit(&gesture_exec_work);
 
-    // Real-time pattern match in eager mode
-    if (config->enable_eager_mode) {
-        match_gesture_pattern_locked(dev, false);
-    }
-
-    k_mutex_unlock(&data->lock);
-
-    return ret;
+    return ZMK_INPUT_PROC_CONTINUE;
 }
 
 static int input_processor_mouse_gesture_init(const struct device *dev) {
     LOG_INF("Mouse gesture input processor init start");
+
+    /* Save global dev reference for work handler */
+    gesture_dev = dev;
 
     struct input_processor_mouse_gesture_data *data = dev->data;
 
@@ -431,55 +497,17 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
         return ZMK_EV_EVENT_BUBBLE;
     }
 
-    // Find the first input processor device instance
-    const struct device *dev = NULL;
+    struct state_action_msg msg = {
+        .activate = ev->is_active,
+    };
 
-    // This is a simplified approach - in a production system you might want to
-    // iterate through all instances or use a device registry
-    #if DT_NODE_EXISTS(DT_DRV_INST(0))
-    dev = DEVICE_DT_INST_GET(0);
-    #endif
-
-    if (dev == NULL) {
-        LOG_WRN("No mouse gesture input processor device found");
-        return ZMK_EV_EVENT_BUBBLE;
+    /* Enqueue state change; drop if queue full */
+    if (k_msgq_put(&state_action_msgq, &msg, K_NO_WAIT) != 0) {
+        LOG_WRN("State action queue full – state change dropped");
     }
 
-    struct input_processor_mouse_gesture_data *data = dev->data;
-
-    // Skip state change until initialization is complete
-    if (data->dev == NULL) {
-        return ZMK_EV_EVENT_BUBBLE;
-    }
-    const struct input_processor_mouse_gesture_config *config = dev->config;
-
-    // Update state with mutex protection
-    // Longer timeout for state changes
-    int ret = k_mutex_lock(&data->lock, K_MSEC(250));
-    if (ret != 0) {
-        return ZMK_EV_EVENT_BUBBLE;
-    }
-
-    bool old_state = data->is_active;
-    data->is_active = ev->is_active;
-
-    if (old_state && !ev->is_active) {
-        LOG_INF("Mouse gesture state changed: ACTIVE -> INACTIVE");
-
-        if (!config->enable_eager_mode) {
-            // Check for pattern match on deactivation in non-eager mode
-            match_gesture_pattern_locked(dev, true);
-        } else {
-            // clear gesture data if in eager mode
-            clear_gesture_data_locked(data);
-        }
-    } else if (!old_state && ev->is_active) {
-        LOG_INF("Mouse gesture state changed: INACTIVE -> ACTIVE");
-        // Clear gesture data when activating
-        clear_gesture_data_locked(data);
-    }
-
-    k_mutex_unlock(&data->lock);
+    /* Ensure work runs */
+    k_work_submit(&gesture_exec_work);
 
     return ZMK_EV_EVENT_BUBBLE;
 }
