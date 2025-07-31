@@ -77,9 +77,6 @@ struct mouse_rel_msg {
 #define MOUSE_REL_MSG_QUEUE_LEN 32
 K_MSGQ_DEFINE(mouse_rel_msgq, sizeof(struct mouse_rel_msg), MOUSE_REL_MSG_QUEUE_LEN, 4);
 
-
-
-
 struct gesture_pattern {
     size_t bindings_len;
     struct zmk_behavior_binding *bindings;
@@ -98,8 +95,6 @@ struct input_processor_mouse_gesture_config {
     struct gesture_pattern **patterns;  // Array of pointers to patterns
     size_t pattern_count;
 };
-
-
 
 struct input_processor_mouse_gesture_data {
     struct k_mutex lock;
@@ -182,8 +177,6 @@ static struct gesture_pattern* match_gesture_pattern_locked(const struct device 
     return NULL;
 }
 
-
-
 // Work queue handler for idle timeout gesture execution
 static void idle_timeout_work_handler(struct k_work *work) {
     struct k_work_delayable *delayed_work = k_work_delayable_from_work(work);
@@ -203,7 +196,6 @@ static void idle_timeout_work_handler(struct k_work *work) {
         k_mutex_unlock(&data->lock);
     }
 }
-
 
 /* Primary work handler processing message queues */
 static void gesture_exec_work_cb(struct k_work *work) {
@@ -466,7 +458,6 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     data->event_count = 0;
     data->last_reset_time = k_uptime_get();
 
-
     // Initialize idle timeout work
     k_work_init_delayable(&data->idle_timeout_work, idle_timeout_work_handler);
     data->last_movement_time = 0;
@@ -511,7 +502,6 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
 
     return ZMK_EV_EVENT_BUBBLE;
 }
-
 
 static struct zmk_input_processor_driver_api input_processor_mouse_gesture_driver_api = {
     .handle_event = input_processor_mouse_gesture_handle_event,
