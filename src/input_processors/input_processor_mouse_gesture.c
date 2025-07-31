@@ -40,7 +40,6 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define MAX_GESTURE_PATTERNS 16
 #define MAX_DEFERRED_BINDINGS 8
 
-// Gesture pattern definition (from behavior)
 struct gesture_pattern {
     size_t bindings_len;
     struct zmk_behavior_binding *bindings;
@@ -60,7 +59,6 @@ struct input_processor_mouse_gesture_config {
     size_t pattern_count;
 };
 
-// Deferred behavior execution data
 struct deferred_behavior_execution {
     struct k_work work;
     struct zmk_behavior_binding bindings[MAX_DEFERRED_BINDINGS];
@@ -89,7 +87,6 @@ struct input_processor_mouse_gesture_data {
     K_THREAD_STACK_MEMBER(idle_stack, IDLE_THREAD_STACK_SIZE);
 };
 
-// Forward declarations
 static void schedule_gesture_execution(const struct device *dev, const struct gesture_pattern *pattern);
 static void clear_gesture_data_locked(struct input_processor_mouse_gesture_data *data);
 
@@ -110,7 +107,6 @@ static struct gesture_pattern* match_gesture_pattern_locked(const struct device 
     struct input_processor_mouse_gesture_data *data = dev->data;
     int64_t current_time = k_uptime_get();
 
-    // Early validation
     if (config->pattern_count == 0 || data->sequence_len == 0) {
         return NULL;
     }
@@ -156,13 +152,12 @@ static struct gesture_pattern* match_gesture_pattern_locked(const struct device 
     return NULL;
 }
 
-// Work queue handler for deferred behavior execution
 static void deferred_behavior_work_handler(struct k_work *work) {
     struct deferred_behavior_execution *exec = CONTAINER_OF(work, struct deferred_behavior_execution, work);
 
     LOG_DBG("Executing deferred behavior with %zu bindings", exec->binding_count);
 
-    // Execute behaviors in work queue context (safe from deadlock)
+    // Execute behaviors in work queue context
     for (size_t k = 0; k < exec->binding_count; k++) {
         LOG_DBG("Executing deferred binding [%zu/%zu] with wait-ms=%d, tap-ms=%d",
                 k + 1, exec->binding_count, exec->wait_ms, exec->tap_ms);
@@ -190,7 +185,7 @@ static void idle_timeout_work_handler(struct k_work *work) {
     k_sem_give(&data->idle_sem);
 }
 
-// Add dedicated thread function for idle-timeout matching
+// Dedicated thread function for idle-timeout matching
 static void idle_thread_fn(void *arg1, void *arg2, void *arg3) {
     const struct device *dev = arg1;
     struct input_processor_mouse_gesture_data *data = dev->data;
@@ -249,7 +244,6 @@ static void schedule_gesture_execution(const struct device *dev, const struct ge
 
 // Safe accumulation with overflow protection
 static int accumulate_movement_safe(int32_t *accumulator, int32_t delta, const char* axis) {
-    // Check for overflow
     if ((*accumulator > 0 && delta > INT32_MAX - *accumulator) ||
         (*accumulator < 0 && delta < INT32_MIN - *accumulator)) {
         LOG_WRN("Movement accumulator overflow on %s axis, resetting (acc=%d, delta=%d)",
@@ -314,7 +308,6 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
 
     // Start/restart idle timeout if configured and not in eager mode
     if (config->idle_timeout_ms > 0 && !config->enable_eager_mode && data->sequence_len > 0) {
-        // Reschedule idle timeout efficiently (avoids cancel+schedule loop)
         int ret = k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
         if (ret < 0) {
             LOG_WRN("Failed to reschedule idle timeout work: %d", ret);
@@ -323,7 +316,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
         }
     }
 
-    // Check for direction detection
+    // Accumulate until stroke size is reached
     uint32_t total_distance = ABS(data->acc_x) + ABS(data->acc_y);
 
     if (total_distance < config->stroke_size) {
@@ -333,7 +326,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     uint8_t direction = detect_direction(data->acc_x, data->acc_y);
 
     if (direction != GESTURE_NONE) {
-        // Check for duplicate direction
+        // Ignore duplicate direction
         if (data->sequence_len > 0 && data->sequence[data->sequence_len - 1] == direction) {
             LOG_DBG("Ignoring duplicate direction %d", direction);
         } else {
@@ -344,7 +337,6 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
 
                 // Start idle timeout if configured and not in eager mode and this is the first direction
                 if (config->idle_timeout_ms > 0 && !config->enable_eager_mode && data->sequence_len == 1) {
-                    // Reschedule idle timeout efficiently
                     int ret = k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
                     if (ret < 0) {
                         LOG_WRN("Failed to reschedule idle timeout work: %d", ret);
@@ -479,7 +471,6 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
     bool old_state = data->is_active;
     data->is_active = ev->is_active;
 
-    // When gesture becomes inactive, check for pattern match in non-eager mode
     if (old_state && !ev->is_active) {
         LOG_INF("Mouse gesture state changed: ACTIVE -> INACTIVE");
 
@@ -506,11 +497,9 @@ static struct zmk_input_processor_driver_api input_processor_mouse_gesture_drive
     .handle_event = input_processor_mouse_gesture_handle_event,
 };
 
-// Device tree binding transformation (from behavior)
 #define TRANSFORMED_BINDINGS(n)                                                                    \
     { LISTIFY(DT_PROP_LEN(n, bindings), ZMK_KEYMAP_EXTRACT_BINDING, (, ), n) }
 
-// Gesture pattern instance creation
 #define GESTURE_PATTERN_INST(n)                                                                    \
     static struct zmk_behavior_binding                                                             \
         gesture_pattern_config_##n##_bindings[DT_PROP_LEN(n, bindings)] =                          \
