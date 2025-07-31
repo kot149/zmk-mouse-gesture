@@ -279,7 +279,7 @@ static void schedule_gesture_execution(const struct device *dev, const struct ge
     msg.wait_ms = pattern->wait_ms;
     msg.tap_ms = pattern->tap_ms;
 
-    int ret = k_msgq_put(&gesture_exec_msgq, &msg, K_NO_WAIT);
+    int ret = k_msgq_put(&gesture_exec_msgq, &msg, K_MSEC(10));
     if (ret < 0) {
         LOG_WRN("Gesture execution queue full – gesture dropped (len=%zu)", msg.binding_count);
         return;
@@ -430,7 +430,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
         .value = event->value,
     };
 
-    if (k_msgq_put(&mouse_rel_msgq, &msg, K_NO_WAIT) != 0) {
+    if (k_msgq_put(&mouse_rel_msgq, &msg, K_MSEC(10)) != 0) {
         /* Queue full – drop smallest importance events */
         LOG_WRN("Mouse rel queue full – movement dropped");
     }
@@ -493,7 +493,7 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
     };
 
     /* Enqueue state change; drop if queue full */
-    if (k_msgq_put(&state_action_msgq, &msg, K_NO_WAIT) != 0) {
+    if (k_msgq_put(&state_action_msgq, &msg, K_MSEC(10)) != 0) {
         LOG_WRN("State action queue full – state change dropped");
     }
 
