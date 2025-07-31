@@ -374,6 +374,11 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
     const struct input_processor_mouse_gesture_config *config = dev->config;
     int ret = 0;
 
+    // Skip processing until initialization is complete
+    if (data->dev == NULL) {
+        return ZMK_INPUT_PROC_CONTINUE;
+    }
+
     if (k_mutex_lock(&data->lock, K_NO_WAIT) != 0) {
         return ZMK_INPUT_PROC_CONTINUE;
     }
@@ -391,6 +396,8 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
 }
 
 static int input_processor_mouse_gesture_init(const struct device *dev) {
+    LOG_INF("Mouse gesture input processor init start");
+
     struct input_processor_mouse_gesture_data *data = dev->data;
 
     k_mutex_init(&data->lock);
@@ -417,7 +424,7 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     // Set device back-reference for access in work handlers
     data->dev = dev;
 
-    LOG_INF("Mouse gesture input processor initialized with deferred execution");
+    LOG_INF("Mouse gesture input processor init done");
     return 0;
 }
 
@@ -455,6 +462,11 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
     }
 
     struct input_processor_mouse_gesture_data *data = dev->data;
+
+    // Skip state change until initialization is complete
+    if (data->dev == NULL) {
+        return ZMK_EV_EVENT_BUBBLE;
+    }
     const struct input_processor_mouse_gesture_config *config = dev->config;
 
     // Update state with mutex protection
