@@ -56,9 +56,7 @@ K_MSGQ_DEFINE(gesture_exec_msgq, sizeof(struct gesture_exec_msg), GESTURE_EXEC_M
 
 /* Forward declaration for locked event handler */
 static int input_processor_mouse_gesture_handle_event_locked(const struct device *dev,
-                                                             struct input_event *event,
-                                                             uint32_t param1, uint32_t param2,
-                                                             struct zmk_input_processor_state *state);
+                                                             struct input_event *event);
 
 static void gesture_exec_work_cb(struct k_work *work);
 static K_WORK_DEFINE(gesture_exec_work, gesture_exec_work_cb);
@@ -227,7 +225,7 @@ static void gesture_exec_work_cb(struct k_work *work) {
                 .code = m_msg.code,
                 .value = m_msg.value,
             };
-            input_processor_mouse_gesture_handle_event_locked(dev, &ev, 0, 0, NULL);
+            input_processor_mouse_gesture_handle_event_locked(dev, &ev);
             if (((struct input_processor_mouse_gesture_config *)dev->config)->enable_eager_mode) {
                 match_gesture_pattern_locked(dev, false);
             }
@@ -304,9 +302,7 @@ static int accumulate_movement_safe(int32_t *accumulator, int32_t delta, const c
 }
 
 static int input_processor_mouse_gesture_handle_event_locked(const struct device *dev,
-                                                      struct input_event *event,
-                                                      uint32_t param1, uint32_t param2,
-                                                      struct zmk_input_processor_state *state) {
+                                                      struct input_event *event) {
     struct input_processor_mouse_gesture_data *data = dev->data;
     const struct input_processor_mouse_gesture_config *config = dev->config;
     int64_t current_time = k_uptime_get();
