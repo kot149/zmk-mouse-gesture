@@ -28,10 +28,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
-/* Global pointer to the first gesture processor device so that work
- * handler can access runtime data without costly lookups.
- */
-static const struct device *gesture_dev = NULL;
+
 
 #define ABS(x) ((x) < 0 ? -(x) : (x))
 #ifndef MIN
@@ -199,7 +196,7 @@ static void idle_timeout_work_handler(struct k_work *work) {
 static void gesture_exec_work_cb(struct k_work *work) {
     ARG_UNUSED(work);
 
-    const struct device *dev = gesture_dev;
+    const struct device *dev = DEVICE_DT_INST_GET(0);
     if (!dev) {
         return;
     }
@@ -439,8 +436,6 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
 static int input_processor_mouse_gesture_init(const struct device *dev) {
     LOG_INF("Mouse gesture input processor init start");
 
-    /* Save global dev reference for work handler */
-    gesture_dev = dev;
 
     struct input_processor_mouse_gesture_data *data = dev->data;
 
