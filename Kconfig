@@ -8,3 +8,21 @@ config ZMK_MOUSE_GESTURE
 	help
 	  Enable mouse gesture support for ZMK.
 	  This allows converting sequences of mouse movements into key presses.
+
+config ZMK_MOUSE_GESTURE_EXEC_MAX_EVENTS
+	int "Maximum queued gesture execution events"
+	default 8
+	depends on ZMK_MOUSE_GESTURE
+	range 1 32
+	help
+	  Size of the message queue used for deferred gesture execution. Increase if you see
+	  warnings about "Gesture execution queue full".
+
+config ZMK_MOUSE_GESTURE_REL_QUEUE_LEN
+	int "Maximum queued mouse relative movement events"
+	default 32
+	depends on ZMK_MOUSE_GESTURE
+	range 8 128
+	help
+	  Size of the message queue buffering raw relative mouse movements before they
+	  are processed into gesture sequences.
