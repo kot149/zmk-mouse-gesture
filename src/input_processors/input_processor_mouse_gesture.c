@@ -84,7 +84,7 @@ struct input_processor_mouse_gesture_data {
 };
 
 // Forward declarations
-static void schedule_gesture_execution(const struct device *dev, struct gesture_pattern *pattern);
+static void schedule_gesture_execution(const struct device *dev, const struct gesture_pattern *pattern);
 static void clear_gesture_data_locked(struct input_processor_mouse_gesture_data *data);
 
 static uint8_t detect_direction(int32_t x, int32_t y) {
@@ -209,7 +209,7 @@ static void idle_timeout_work_handler(struct k_work *work) {
 }
 
 // Schedule gesture execution via work queue
-static void schedule_gesture_execution(const struct device *dev, struct gesture_pattern *pattern) {
+static void schedule_gesture_execution(const struct device *dev, const struct gesture_pattern *pattern) {
     if (!pattern || pattern->bindings_len == 0) {
         return;
     }
