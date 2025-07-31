@@ -74,12 +74,12 @@ struct input_processor_mouse_gesture_data {
     int32_t acc_y;
     uint8_t sequence[MAX_GESTURE_SEQUENCE_LENGTH];
     uint8_t sequence_len;
-    int64_t last_gesture_time;  // Timestamp of last gesture execution
+    int64_t last_gesture_time;  // Timestamp of last gesture execution; used for cooldown period
     uint32_t event_count;       // Counter to detect potential loops
-    int64_t last_reset_time;    // Time of last counter reset
+    int64_t last_reset_time;    // Time of last counter reset; used for event loop detection
     struct deferred_behavior_execution deferred_behavior_exec;  // Work queue item
     struct k_work_delayable idle_timeout_work;  // Work queue item for idle timeout
-    int64_t last_movement_time;  // Timestamp of last mouse movement
+    int64_t last_movement_time;  // Timestamp of last mouse movement; used for idle timeout
     const struct device *dev;  // Back-reference to device for safe work handler access
 };
 
@@ -98,7 +98,8 @@ static uint8_t detect_direction(int32_t x, int32_t y) {
     return GESTURE_NONE;
 }
 
-// Check if pattern matches and update state atomically (called while mutex is held)
+// Check if pattern matches (should be called while mutex is held)
+// Clears gesture data if matched
 static struct gesture_pattern* match_gesture_pattern_locked(const struct device *dev) {
     const struct input_processor_mouse_gesture_config *config = dev->config;
     struct input_processor_mouse_gesture_data *data = dev->data;
@@ -134,7 +135,6 @@ static struct gesture_pattern* match_gesture_pattern_locked(const struct device 
         if (match) {
             LOG_INF("Gesture pattern matched: %zu", i);
 
-            // Update all state atomically - no separate flag reset needed
             data->last_gesture_time = current_time;
             clear_gesture_data_locked(data);
 
@@ -177,7 +177,6 @@ static void idle_timeout_work_handler(struct k_work *work) {
     struct input_processor_mouse_gesture_data *data = CONTAINER_OF(delayed_work,
         struct input_processor_mouse_gesture_data, idle_timeout_work);
 
-    // Use back-reference to device for safe access
     const struct device *dev = data->dev;
     if (dev == NULL) {
         LOG_ERR("Device back-reference is NULL in idle timeout handler");
@@ -210,7 +209,7 @@ static void idle_timeout_work_handler(struct k_work *work) {
     }
 }
 
-// Schedule gesture execution via work queue (completely asynchronous)
+// Schedule gesture execution via work queue
 static void schedule_gesture_execution(const struct device *dev, struct gesture_pattern *pattern) {
     if (!pattern || pattern->bindings_len == 0) {
         return;
@@ -243,7 +242,7 @@ static void schedule_gesture_execution(const struct device *dev, struct gesture_
     exec->event.source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL;
 #endif
 
-    // Submit to system work queue (completely asynchronous)
+    // Submit to system work queue
     int ret = k_work_submit(&exec->work);
     if (ret < 0) {
         LOG_ERR("Failed to submit gesture work: %d", ret);
@@ -289,7 +288,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
-    // Check if mouse gesture is active (early exit)
+    // Check if mouse gesture is active
     if (!data->is_active) {
         data->acc_x = 0;
         data->acc_y = 0;
@@ -379,14 +378,13 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
     const struct input_processor_mouse_gesture_config *config = dev->config;
     int ret = 0;
 
-    // Single mutex operation - acquire, process, check pattern, release
     if (k_mutex_lock(&data->lock, K_NO_WAIT) != 0) {
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
     ret = input_processor_mouse_gesture_handle_event_locked(dev, event, param1, param2, state);
 
-    // Only check for pattern match in eager mode
+    // Real-time pattern match in eager mode
     if (config->enable_eager_mode) {
         struct gesture_pattern *matched_pattern = match_gesture_pattern_locked(dev);
         k_mutex_unlock(&data->lock);
@@ -426,7 +424,7 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     k_work_init_delayable(&data->idle_timeout_work, idle_timeout_work_handler);
     data->last_movement_time = 0;
 
-    // Set device back-reference for safe access in work handlers
+    // Set device back-reference for access in work handlers
     data->dev = dev;
 
     LOG_INF("Mouse gesture input processor initialized with deferred execution");
