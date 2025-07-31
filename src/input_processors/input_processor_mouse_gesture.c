@@ -40,8 +40,6 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define MAX_DEFERRED_BINDINGS 8
 
 /* Message queue definitions for gesture execution */
-#define GESTURE_EXEC_MAX_EVENTS 8
-
 struct gesture_exec_msg {
     size_t binding_count;
     struct zmk_behavior_binding bindings[MAX_DEFERRED_BINDINGS];
@@ -49,7 +47,7 @@ struct gesture_exec_msg {
     uint32_t tap_ms;
 };
 
-K_MSGQ_DEFINE(gesture_exec_msgq, sizeof(struct gesture_exec_msg), GESTURE_EXEC_MAX_EVENTS, 4);
+K_MSGQ_DEFINE(gesture_exec_msgq, sizeof(struct gesture_exec_msg), CONFIG_ZMK_MOUSE_GESTURE_EXEC_MAX_EVENTS, 4);
 
 /* Forward declaration for locked event handler */
 static int input_processor_mouse_gesture_handle_event_locked(const struct device *dev,
@@ -69,8 +67,8 @@ struct mouse_rel_msg {
     uint16_t code;
     int32_t value;
 };
-#define MOUSE_REL_MSG_QUEUE_LEN 32
-K_MSGQ_DEFINE(mouse_rel_msgq, sizeof(struct mouse_rel_msg), MOUSE_REL_MSG_QUEUE_LEN, 4);
+
+K_MSGQ_DEFINE(mouse_rel_msgq, sizeof(struct mouse_rel_msg), CONFIG_ZMK_MOUSE_GESTURE_REL_QUEUE_LEN, 4);
 
 struct gesture_pattern {
     size_t bindings_len;
