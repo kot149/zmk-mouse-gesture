@@ -34,6 +34,11 @@ properties:
     default: 150
     description: "Time in milliseconds to wait for idle before invoking gesture. When set to 0, idle timeout is disabled."
 
+  gesture-cooldown-ms:
+    type: int
+    default: 500
+    description: "Time in milliseconds to wait before allowing another gesture to be processed after the previous one. This is useful to prevent unexpected double gestures."
+
 child-binding:
   description: "Mouse gesture definition"
   properties:
