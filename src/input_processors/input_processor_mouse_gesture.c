@@ -38,6 +38,42 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define MAX_GESTURE_SEQUENCE_LENGTH 8
 #define MAX_GESTURE_PATTERNS 16
 #define MAX_DEFERRED_BINDINGS 8
+#define MAX_GESTURE_TRIE_NODES (MAX_GESTURE_PATTERNS * MAX_GESTURE_SEQUENCE_LENGTH + 1)
+
+struct gesture_node {
+    struct gesture_node *child[4];
+    const struct gesture_pattern *pattern;
+};
+
+static struct gesture_node gesture_nodes_pool[MAX_GESTURE_TRIE_NODES];
+static size_t gesture_nodes_count = 0;
+static struct gesture_node *gesture_trie_root = NULL;
+
+static struct gesture_node *allocate_gesture_node(void) {
+    if (gesture_nodes_count >= MAX_GESTURE_TRIE_NODES) {
+        return NULL;
+    }
+    struct gesture_node *node = &gesture_nodes_pool[gesture_nodes_count++];
+    memset(node, 0, sizeof(struct gesture_node));
+    return node;
+}
+
+static int direction_to_index(uint8_t direction) {
+    switch (direction) {
+    case GESTURE_UP:
+        return 0;
+    case GESTURE_DOWN:
+        return 1;
+    case GESTURE_LEFT:
+        return 2;
+    case GESTURE_RIGHT:
+        return 3;
+    default:
+        return -1;
+    }
+}
+
+static void build_gesture_trie(const struct gesture_pattern *const *patterns, size_t pattern_count);
 
 /* Message queue definitions for gesture execution */
 struct gesture_exec_msg {
@@ -79,6 +115,39 @@ struct gesture_pattern {
     uint8_t pattern[];  // Variable length array at end
 };
 
+static void build_gesture_trie(const struct gesture_pattern *const *patterns, size_t pattern_count) {
+    if (gesture_trie_root != NULL) {
+        return;
+    }
+    gesture_trie_root = allocate_gesture_node();
+    if (!gesture_trie_root) {
+        return;
+    }
+    for (size_t i = 0; i < pattern_count; i++) {
+        const struct gesture_pattern *pat = patterns[i];
+        struct gesture_node *node = gesture_trie_root;
+        for (size_t j = 0; j < pat->pattern_len; j++) {
+            int idx = direction_to_index(pat->pattern[j]);
+            if (idx < 0) {
+                node = NULL;
+                break;
+            }
+            if (!node->child[idx]) {
+                node->child[idx] = allocate_gesture_node();
+                if (!node->child[idx]) {
+                    node = NULL;
+                    break;
+                }
+            }
+            node = node->child[idx];
+        }
+        if (node) {
+            node->pattern = pat;
+        }
+    }
+}
+
+
 struct input_processor_mouse_gesture_config {
     uint32_t stroke_size;
     uint32_t movement_threshold;
@@ -101,6 +170,7 @@ struct input_processor_mouse_gesture_data {
     int64_t last_reset_time;    // Time of last counter reset; used for event loop detection
     struct k_work_delayable idle_timeout_work;  // Work queue item for idle timeout
     int64_t last_movement_time;  // Timestamp of last mouse movement; used for idle timeout
+    struct gesture_node *current_node;
     const struct device *dev;  // Back-reference to device for safe work handler access
 
 };
@@ -125,49 +195,48 @@ static const struct gesture_pattern *match_gesture_pattern_locked(const struct d
     struct input_processor_mouse_gesture_data *data = dev->data;
     int64_t current_time = k_uptime_get();
 
-    if (config->pattern_count == 0 || data->sequence_len == 0) {
-        return NULL;
-    }
-
-    // Check cooldown period
-    if (current_time - data->last_gesture_time < config->gesture_cooldown_ms) {
-        LOG_DBG("Still in cooldown period");
-        return NULL;
-    }
-
-    // Find matching pattern
-    for (size_t i = 0; i < config->pattern_count; i++) {
-        const struct gesture_pattern *pattern = config->patterns[i];
-
-        if (pattern->pattern_len != data->sequence_len) {
-            continue;
-        }
-
-        bool match = true;
-        for (size_t j = 0; j < pattern->pattern_len; j++) {
-            if (pattern->pattern[j] != data->sequence[j]) {
-                match = false;
-                break;
-            }
-        }
-
-        if (match) {
-            LOG_INF("Gesture pattern matched: %zu", i);
-
-            data->last_gesture_time = current_time;
+    if (!data->current_node) {
+        if (clear_even_if_not_matched) {
             clear_gesture_data_locked(data);
+        }
+        return NULL;
+    }
 
-            schedule_gesture_execution(dev, pattern);
-
-            return pattern;
+    const struct gesture_node *node = data->current_node;
+    bool has_binding = node->pattern != NULL;
+    bool has_child = false;
+    for (int i = 0; i < 4; i++) {
+        if (node->child[i]) {
+            has_child = true;
+            break;
         }
     }
 
-    if (clear_even_if_not_matched) {
-        clear_gesture_data_locked(data);
+    // Exit if no binding found (means no gesture pattern matched)
+    if (!has_binding) {
+        if (clear_even_if_not_matched) {
+            clear_gesture_data_locked(data);
+        }
+        return NULL;
     }
 
-    return NULL;
+    if (current_time - data->last_gesture_time < config->gesture_cooldown_ms) {
+        return NULL;
+    }
+
+    // Invoke by idle timeout if duplicate gesture found in eager mode
+    if (config->enable_eager_mode && has_child && !clear_even_if_not_matched) {
+        if (config->idle_timeout_ms > 0) {
+            k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
+        }
+        return NULL;
+    }
+
+    const struct gesture_pattern *pattern = node->pattern;
+    data->last_gesture_time = current_time;
+    clear_gesture_data_locked(data);
+    schedule_gesture_execution(dev, pattern);
+    return pattern;
 }
 
 // Work queue handler for idle timeout gesture execution
@@ -321,6 +390,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
         data->acc_x = 0;
         data->acc_y = 0;
         data->sequence_len = 0;
+        data->current_node = gesture_trie_root;
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
@@ -372,6 +442,16 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
             if (data->sequence_len < MAX_GESTURE_SEQUENCE_LENGTH) {
                 data->sequence[data->sequence_len++] = direction;
                 LOG_DBG("Added direction %d to sequence (length: %d)", direction, data->sequence_len);
+                int dir_idx = direction_to_index(direction);
+                if (data->current_node && dir_idx >= 0) {
+                    data->current_node = data->current_node->child[dir_idx];
+                } else {
+                    data->current_node = NULL;
+                }
+                if (data->current_node == NULL) {
+                    clear_gesture_data_locked(data);
+                    return ZMK_INPUT_PROC_CONTINUE;
+                }
 
                 // Start idle timeout if configured and not in eager mode and this is the first direction
                 if (config->idle_timeout_ms > 0 && !config->enable_eager_mode && data->sequence_len == 1) {
@@ -436,6 +516,8 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
 
 
     struct input_processor_mouse_gesture_data *data = dev->data;
+    const struct input_processor_mouse_gesture_config *config = dev->config;
+    build_gesture_trie(config->patterns, config->pattern_count);
 
     k_mutex_init(&data->lock);
 
@@ -451,6 +533,7 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     k_work_init_delayable(&data->idle_timeout_work, idle_timeout_work_handler);
     data->last_movement_time = 0;
 
+    data->current_node = gesture_trie_root;
     // Set device back-reference for access in work handlers
     data->dev = dev;
 
@@ -463,6 +546,7 @@ static void clear_gesture_data_locked(struct input_processor_mouse_gesture_data 
     data->acc_x = 0;
     data->acc_y = 0;
     data->sequence_len = 0;
+    data->current_node = gesture_trie_root;
 
     // Cancel any pending idle timeout
     k_work_cancel_delayable(&data->idle_timeout_work);
