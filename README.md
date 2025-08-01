@@ -103,8 +103,8 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 #### Options
 
 - `stroke-size`: Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
-- `enable-eager-mode`: Execute bindings immediately when gesture pattern is matched. When not set, bindings are executed when activation key is released.
-- `idle-timeout-ms`: Time in milliseconds to wait for idle before invoking gesture. When set to 0 (default), idle timeout is disabled. This can invoke gesture earlier than the release of activation key when eager mode is not enabled.
+- `idle-timeout-ms`: Time in milliseconds to wait for idle before invoking gesture. When set to 0, idle timeout is disabled.
+- `enable-eager-mode`: Execute pattern matching in real-time and invoke bindings immediately when gesture pattern is matched. Duplicate gestures are resolved by invoking after idle timeout, which will be canceled if longer gesture is detected within the timeout, while non-duplicate gestures are invoked immediately. When eager mode is disabled, pattern match will only be performed when idle timeout triggers or the activation key is released.
 
 ### 5. Perform the gesture
 
@@ -117,32 +117,6 @@ Activate gesture by pressing the activation key and perform the gesture.
 - **Activate with existing keys**: use [zmk-listeners](https://github.com/ssbb/zmk-listeners) to activate the gesture with existing keys
 
 - **Layer-specific gestures**: define [layer-spesific input processors](https://zmk.dev/docs/keymaps/input-processors/usage#layer-specific-overrides) to trigger different gestures on different layers
-
-## How it works
-
-While `&mouse_gesture` is pressed, `&zip_mouse_gesture` listens to mouse input events and accumulates the movement value.
-When accumulated value become bigger than `stroke-size`, the processor judges its direction, then pushes it to mouse gesture sequence.
-When matching gesture found for the sequence, its bindings will be invoked according to the configured execution mode:
-
-**Default Mode (enable-eager-mode NOT specified):**
-- Pattern matching and binding execution occur only when gesture recognition becomes inactive (i.e., when the activation key is released)
-- This allows you to perform complex gesture sequences without interruption
-- The complete accumulated gesture sequence is evaluated at the end
-
-**Eager Mode (enable-eager-mode specified):**
-- Pattern matching occurs in real-time during gesture input
-- Bindings are executed immediately when a gesture pattern is matched
-- This provides instant feedback and faster gesture execution, but increases computational cost
-- Complex gesture may be interrupted by smaller one
-
-**Idle Timeout Mode (idle-timeout-ms > 0 and enable-eager-mode NOT specified):**
-- Pattern matching and binding execution occur when mouse movement becomes idle for the specified duration
-- This allows gesture execution without releasing the activation key, useful for continuous gesture operations
-- The idle timer is reset on each mouse movement and starts after the first gesture direction is detected
-- Provides a middle ground between default mode and eager mode
-
-The accumulated value is reset when the direction is detected or the activation key is released.
-The sequence is cleared when a gesture is detected, idle timeout triggers, or the activation key is released.
 
 ## Related Works
 
