@@ -37,7 +37,7 @@ properties:
   gesture-cooldown-ms:
     type: int
     default: 500
-    description: "Time in milliseconds to stop processing for next gesture after the execution of the a gesture. This is useful to prevent unexpected double gestures."
+    description: "Time in milliseconds to stop processing for next gesture after the execution of a gesture. This is useful to prevent unexpected double gestures."
 
 child-binding:
   description: "Mouse gesture definition"
