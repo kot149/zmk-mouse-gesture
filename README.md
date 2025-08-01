@@ -106,7 +106,7 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 - `idle-timeout-ms` (default: 150): Time in milliseconds to wait for idle before invoking gesture. When set to 0, idle timeout is disabled.
 - `enable-eager-mode` (default: false): Execute pattern matching in real-time and invoke bindings immediately when gesture pattern is matched. (Duplicate gestures are resolved by invoking after idle timeout, which will be canceled if longer gesture is detected within the timeout, while non-duplicate gestures are invoked immediately.) When disabled, pattern match will only be performed when idle timeout triggers or the activation key is released.
 - `movement-threshold` (default: 10): Threshold for each x/y event.
-- `gesture_cooldown_ms` (default: 500): Time in milliseconds to wait before allowing another gesture to be processed after the previous one. This is useful to prevent unexpected double gestures.
+- `gesture-cooldown-ms` (default: 500): Time in milliseconds to stop processing for next gesture after the execution of the a gesture. This is useful to prevent unexpected double gestures.
 
 ### 5. Perform the gesture
 
