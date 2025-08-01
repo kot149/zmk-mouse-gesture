@@ -384,6 +384,10 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
+    if (current_time - data->last_gesture_time < config->gesture_cooldown_ms) {
+        return ZMK_INPUT_PROC_CONTINUE;
+    }
+
     // Check if mouse gesture is active
     if (!data->is_active) {
         data->acc_x = 0;
