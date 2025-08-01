@@ -275,9 +275,9 @@ static void gesture_exec_work_cb(struct k_work *work) {
         while (k_msgq_get(&state_action_msgq, &s_msg, K_NO_WAIT) == 0) {
             bool old_state = data->is_active;
             data->is_active = s_msg.activate;
-            if (old_state && !s_msg.activate) {
+            if (old_state && !s_msg.activate) { // Deactivated
                 match_gesture_pattern_locked(dev, true);
-            } else if (!old_state && s_msg.activate) {
+            } else if (!old_state && s_msg.activate) { // Activated
                 clear_gesture_data_locked(data);
             }
         }
