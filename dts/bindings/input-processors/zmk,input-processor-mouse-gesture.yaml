@@ -17,7 +17,7 @@ properties:
 
   stroke-size:
     type: int
-    default: 1000
+    default: 500
     description: "Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored."
 
   movement-threshold:
@@ -27,12 +27,12 @@ properties:
 
   enable-eager-mode:
     type: boolean
-    description: "Execute bindings immediately when gesture pattern is matched. When false, bindings are executed when gesture recognition becomes inactive."
+    description: "Execute pattern matching in real-time and invoke bindings immediately when gesture pattern is matched. (Duplicate gestures are resolved by invoking after idle timeout, which will be canceled if longer gesture is detected within the timeout, while non-duplicate gestures are invoked immediately.) When disabled, pattern match will only be performed when idle timeout triggers or the activation key is released."
 
   idle-timeout-ms:
     type: int
-    default: 0
-    description: "Time in milliseconds to wait for idle before invoking gesture. When set to 0 (default), idle timeout is disabled. This can invoke gesture earlier than the release of activation key when eager mode is not enabled."
+    default: 150
+    description: "Time in milliseconds to wait for idle before invoking gesture. When set to 0, idle timeout is disabled."
 
 child-binding:
   description: "Mouse gesture definition"
