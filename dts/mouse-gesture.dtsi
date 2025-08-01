@@ -10,9 +10,10 @@
     /omit-if-no-ref/ zip_mouse_gesture: zip_mouse_gesture {
         compatible = "zmk,input-processor-mouse-gesture";
         #input-processor-cells = <0>;
-        stroke-size = <300>;
-        movement-threshold = <10>;
-        idle-timeout-ms = <0>;  // Disabled by default. Set to >0 to enable idle timeout
+
+        // stroke-size = <500>;
+        // movement-threshold = <10>;
+        // idle-timeout-ms = <150>;
     };
 
     /omit-if-no-ref/ mouse_gesture: mouse_gesture {
