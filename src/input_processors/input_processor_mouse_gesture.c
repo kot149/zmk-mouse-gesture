@@ -616,7 +616,7 @@ static const struct gesture_pattern *gesture_patterns[] = {DT_INST_FOREACH_CHILD
         .movement_threshold = DT_INST_PROP_OR(n, movement_threshold, 10),           \
         .gesture_cooldown_ms = DT_INST_PROP_OR(n, gesture_cooldown_ms, 200),        \
         .enable_eager_mode = DT_INST_PROP_OR(n, enable_eager_mode, false),          \
-        .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 0),                  \
+        .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 150),                \
         .patterns = gesture_patterns,                                               \
         .pattern_count = PATTERN_COUNT,                                             \
     };                                                                              \

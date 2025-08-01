@@ -68,7 +68,6 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 &zip_mouse_gesture {
     // stroke-size = <300>;
     // enable-eager-mode;
-    // idle-timeout-ms = <1000>;
 
     history_back {
         pattern = <GESTURE_RIGHT>;

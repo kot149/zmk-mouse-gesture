@@ -31,7 +31,7 @@ properties:
 
   idle-timeout-ms:
     type: int
-    default: 0
+    default: 150
     description: "Time in milliseconds to wait for idle before invoking gesture. When set to 0 (default), idle timeout is disabled. This can invoke gesture earlier than the release of activation key when eager mode is not enabled."
 
 child-binding:
