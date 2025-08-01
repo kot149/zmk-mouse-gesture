@@ -584,16 +584,16 @@ static const struct zmk_input_processor_driver_api input_processor_mouse_gesture
     { LISTIFY(DT_PROP_LEN(n, bindings), ZMK_KEYMAP_EXTRACT_BINDING, (, ), n) }
 
 #define GESTURE_PATTERN_INST(n)                                                                    \
-    static const struct zmk_behavior_binding                                                             \
+    static const struct zmk_behavior_binding                                                       \
         gesture_pattern_config_##n##_bindings[DT_PROP_LEN(n, bindings)] =                          \
             TRANSFORMED_BINDINGS(n);                                                               \
                                                                                                    \
-    static const struct gesture_pattern gesture_pattern_cfg_##n = {                                      \
+    static const struct gesture_pattern gesture_pattern_cfg_##n = {                                \
         .bindings_len = DT_PROP_LEN(n, bindings),                                                  \
         .bindings = gesture_pattern_config_##n##_bindings,                                         \
         .pattern_len = DT_PROP_LEN(n, pattern),                                                    \
         .wait_ms = DT_PROP_OR(n, wait_ms, CONFIG_ZMK_MACRO_DEFAULT_WAIT_MS),                       \
-        .tap_ms = DT_PROP_OR(n, tap_ms, CONFIG_ZMK_MACRO_DEFAULT_TAP_MS),                         \
+        .tap_ms = DT_PROP_OR(n, tap_ms, CONFIG_ZMK_MACRO_DEFAULT_TAP_MS),                          \
         .pattern = DT_PROP(n, pattern),                                                            \
     };
 
@@ -610,9 +610,9 @@ static const struct gesture_pattern *gesture_patterns[] = {DT_INST_FOREACH_CHILD
 #define MOUSE_GESTURE_INPUT_PROCESSOR_INST(n)                                       \
     static struct input_processor_mouse_gesture_data                                \
         input_processor_mouse_gesture_data_##n = {};                                \
-    static const struct input_processor_mouse_gesture_config                              \
+    static const struct input_processor_mouse_gesture_config                        \
         input_processor_mouse_gesture_config_##n = {                                \
-        .stroke_size = DT_INST_PROP_OR(n, stroke_size, 1000),                       \
+        .stroke_size = DT_INST_PROP_OR(n, stroke_size, 500),                        \
         .movement_threshold = DT_INST_PROP_OR(n, movement_threshold, 10),           \
         .gesture_cooldown_ms = DT_INST_PROP_OR(n, gesture_cooldown_ms, 200),        \
         .enable_eager_mode = DT_INST_PROP_OR(n, enable_eager_mode, false),          \

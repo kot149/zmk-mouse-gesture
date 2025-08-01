@@ -66,7 +66,7 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 #include <mouse-gesture.dtsi>
 
 &zip_mouse_gesture {
-    stroke-size = <300>; // Optional (default: 1000)
+    stroke-size = <300>; // Optional (default: 500)
     enable-eager-mode; // Optional, but recommended
 
     history_back {
@@ -102,7 +102,7 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 
 #### Options
 
-- `stroke-size` (default: 1000): Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
+- `stroke-size` (default: 500): Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
 - `idle-timeout-ms` (default: 150): Time in milliseconds to wait for idle before invoking gesture. When set to 0, idle timeout is disabled.
 - `enable-eager-mode` (default: false): Execute pattern matching in real-time and invoke bindings immediately when gesture pattern is matched. (Duplicate gestures are resolved by invoking after idle timeout, which will be canceled if longer gesture is detected within the timeout, while non-duplicate gestures are invoked immediately.) When disabled, pattern match will only be performed when idle timeout triggers or the activation key is released.
 - `movement-threshold` (default: 10): Threshold for each x/y event.

@@ -17,7 +17,7 @@ properties:
 
   stroke-size:
     type: int
-    default: 1000
+    default: 500
     description: "Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored."
 
   movement-threshold:
