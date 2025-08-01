@@ -275,7 +275,7 @@ static void gesture_exec_work_cb(struct k_work *work) {
             bool old_state = data->is_active;
             data->is_active = s_msg.activate;
             if (old_state && !s_msg.activate) { // Deactivated
-                    match_gesture_pattern_locked(dev, true);
+                match_gesture_pattern_locked(dev, true);
             } else if (!old_state && s_msg.activate) { // Activated
                 clear_gesture_data_locked(data);
             }
