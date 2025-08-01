@@ -225,17 +225,16 @@ static const struct gesture_pattern *match_gesture_pattern_locked(const struct d
     }
 
     // Invoke by idle timeout if duplicate gesture found in eager mode
-    if (config->enable_eager_mode && has_child && !clear_even_if_not_matched) {
-        if (config->idle_timeout_ms > 0) {
-            k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
-        }
+    if (config->enable_eager_mode && has_child && !clear_even_if_not_matched && config->idle_timeout_ms > 0) {
+        k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
         return NULL;
     }
 
     const struct gesture_pattern *pattern = node->pattern;
     data->last_gesture_time = current_time;
-    clear_gesture_data_locked(data);
     schedule_gesture_execution(dev, pattern);
+    clear_gesture_data_locked(data);
+
     return pattern;
 }
 
@@ -276,7 +275,7 @@ static void gesture_exec_work_cb(struct k_work *work) {
             bool old_state = data->is_active;
             data->is_active = s_msg.activate;
             if (old_state && !s_msg.activate) { // Deactivated
-                match_gesture_pattern_locked(dev, true);
+                    match_gesture_pattern_locked(dev, true);
             } else if (!old_state && s_msg.activate) { // Activated
                 clear_gesture_data_locked(data);
             }
