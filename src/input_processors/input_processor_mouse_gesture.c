@@ -45,15 +45,31 @@ struct gesture_node {
     const struct gesture_pattern *pattern;
 };
 
-static struct gesture_node gesture_nodes_pool[MAX_GESTURE_TRIE_NODES];
-static size_t gesture_nodes_count = 0;
-static struct gesture_node *gesture_trie_root = NULL;
+struct input_processor_mouse_gesture_data {
+    struct k_mutex lock;
+    bool is_active;
+    int32_t acc_x;
+    int32_t acc_y;
+    uint8_t sequence[MAX_GESTURE_SEQUENCE_LENGTH];
+    uint8_t sequence_len;
+    int64_t last_gesture_time;
+    uint32_t event_count;
+    int64_t last_reset_time;
+    struct k_work_delayable idle_timeout_work;
+    int64_t last_movement_time;
+    struct gesture_node *current_node;
+    const struct device *dev;
 
-static struct gesture_node *allocate_gesture_node(void) {
-    if (gesture_nodes_count >= MAX_GESTURE_TRIE_NODES) {
+    struct gesture_node gesture_nodes_pool[MAX_GESTURE_TRIE_NODES];
+    size_t gesture_nodes_count;
+    struct gesture_node *gesture_trie_root;
+};
+
+static struct gesture_node *allocate_gesture_node(struct input_processor_mouse_gesture_data *data) {
+    if (data->gesture_nodes_count >= MAX_GESTURE_TRIE_NODES) {
         return NULL;
     }
-    struct gesture_node *node = &gesture_nodes_pool[gesture_nodes_count++];
+    struct gesture_node *node = &data->gesture_nodes_pool[data->gesture_nodes_count++];
     memset(node, 0, sizeof(struct gesture_node));
     return node;
 }
@@ -73,10 +89,11 @@ static int direction_to_index(uint8_t direction) {
     }
 }
 
-static void build_gesture_trie(const struct gesture_pattern *const *patterns, size_t pattern_count);
+static void build_gesture_trie(struct input_processor_mouse_gesture_data *data, const struct gesture_pattern *patterns, size_t pattern_count);
 
 /* Message queue definitions for gesture execution */
 struct gesture_exec_msg {
+    const struct device *dev;
     size_t binding_count;
     struct zmk_behavior_binding bindings[MAX_DEFERRED_BINDINGS];
     uint32_t wait_ms;
@@ -94,12 +111,14 @@ static K_WORK_DEFINE(gesture_exec_work, gesture_exec_work_cb);
 
 /* State change message queue */
 struct state_action_msg {
+    const struct device *dev;
     bool activate;
 };
 K_MSGQ_DEFINE(state_action_msgq, sizeof(struct state_action_msg), 8, 4);
 
 /* Mouse relative movement message queue */
 struct mouse_rel_msg {
+    const struct device *dev;
     uint16_t code;
     int32_t value;
 };
@@ -112,20 +131,20 @@ struct gesture_pattern {
     size_t pattern_len;
     uint32_t wait_ms;
     uint32_t tap_ms;
-    uint8_t pattern[];  // Variable length array at end
+    const uint8_t *pattern;
 };
 
-static void build_gesture_trie(const struct gesture_pattern *const *patterns, size_t pattern_count) {
-    if (gesture_trie_root != NULL) {
-        return;
+static void build_gesture_trie(struct input_processor_mouse_gesture_data *data, const struct gesture_pattern *patterns, size_t pattern_count) {
+    if (!data->gesture_trie_root) {
+        data->gesture_trie_root = allocate_gesture_node(data);
+        if (!data->gesture_trie_root) {
+            return;
+        }
     }
-    gesture_trie_root = allocate_gesture_node();
-    if (!gesture_trie_root) {
-        return;
-    }
+
     for (size_t i = 0; i < pattern_count; i++) {
-        const struct gesture_pattern *pat = patterns[i];
-        struct gesture_node *node = gesture_trie_root;
+        const struct gesture_pattern *pat = &patterns[i];
+        struct gesture_node *node = data->gesture_trie_root;
         for (size_t j = 0; j < pat->pattern_len; j++) {
             int idx = direction_to_index(pat->pattern[j]);
             if (idx < 0) {
@@ -133,7 +152,7 @@ static void build_gesture_trie(const struct gesture_pattern *const *patterns, si
                 break;
             }
             if (!node->child[idx]) {
-                node->child[idx] = allocate_gesture_node();
+                node->child[idx] = allocate_gesture_node(data);
                 if (!node->child[idx]) {
                     node = NULL;
                     break;
@@ -154,25 +173,8 @@ struct input_processor_mouse_gesture_config {
     uint32_t gesture_cooldown_ms;  // Cooldown period between gestures
     bool enable_eager_mode;  // Execute bindings immediately when gesture pattern is matched
     uint32_t idle_timeout_ms;  // Time to wait for idle before invoking gesture
-    const struct gesture_pattern *const *patterns;  // Array of pointers to patterns
+    const struct gesture_pattern *patterns;  // Array of pointers to patterns
     size_t pattern_count;
-};
-
-struct input_processor_mouse_gesture_data {
-    struct k_mutex lock;
-    bool is_active;
-    int32_t acc_x;
-    int32_t acc_y;
-    uint8_t sequence[MAX_GESTURE_SEQUENCE_LENGTH];
-    uint8_t sequence_len;
-    int64_t last_gesture_time;  // Timestamp of last gesture execution; used for cooldown period
-    uint32_t event_count;       // Counter to detect potential loops
-    int64_t last_reset_time;    // Time of last counter reset; used for event loop detection
-    struct k_work_delayable idle_timeout_work;  // Work queue item for idle timeout
-    int64_t last_movement_time;  // Timestamp of last mouse movement; used for idle timeout
-    struct gesture_node *current_node;
-    const struct device *dev;  // Back-reference to device for safe work handler access
-
 };
 
 static void schedule_gesture_execution(const struct device *dev, const struct gesture_pattern *pattern);
@@ -262,38 +264,44 @@ static void idle_timeout_work_handler(struct k_work *work) {
 static void gesture_exec_work_cb(struct k_work *work) {
     ARG_UNUSED(work);
 
-    const struct device *dev = DEVICE_DT_INST_GET(0);
-    if (!dev) {
-        return;
-    }
-    struct input_processor_mouse_gesture_data *data = dev->data;
-
-    /* -------- 1. State changes & mouse movements (with lock) -------- */
-    if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
-        struct state_action_msg s_msg;
-        while (k_msgq_get(&state_action_msgq, &s_msg, K_NO_WAIT) == 0) {
+    struct state_action_msg s_msg;
+    while (k_msgq_get(&state_action_msgq, &s_msg, K_NO_WAIT) == 0) {
+        const struct device *dev = s_msg.dev;
+        if (!dev) {
+            continue;
+        }
+        struct input_processor_mouse_gesture_data *data = dev->data;
+        if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
             bool old_state = data->is_active;
             data->is_active = s_msg.activate;
             if (old_state && !s_msg.activate) { // Deactivated
                 match_gesture_pattern_locked(dev, true);
-            } else if (!old_state && s_msg.activate) { // Activated
+            } else if (!old_state && s_msg.activate) { // activated
                 clear_gesture_data_locked(data);
             }
+            k_mutex_unlock(&data->lock);
         }
+    }
 
-        struct mouse_rel_msg m_msg;
-        while (k_msgq_get(&mouse_rel_msgq, &m_msg, K_NO_WAIT) == 0) {
+    struct mouse_rel_msg m_msg;
+    while (k_msgq_get(&mouse_rel_msgq, &m_msg, K_NO_WAIT) == 0) {
+        const struct device *dev = m_msg.dev;
+        if (!dev) {
+            continue;
+        }
+        struct input_processor_mouse_gesture_data *data = dev->data;
+        if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
             struct input_event ev = {
                 .type = INPUT_EV_REL,
                 .code = m_msg.code,
                 .value = m_msg.value,
             };
             input_processor_mouse_gesture_handle_event_locked(dev, &ev);
-            if (((struct input_processor_mouse_gesture_config *)dev->config)->enable_eager_mode) {
+            if (((const struct input_processor_mouse_gesture_config *)dev->config)->enable_eager_mode) {
                 match_gesture_pattern_locked(dev, false);
             }
+            k_mutex_unlock(&data->lock);
         }
-        k_mutex_unlock(&data->lock);
     }
 
     /* -------- 2. Gesture execution -------- */
@@ -334,6 +342,7 @@ static void schedule_gesture_execution(const struct device *dev, const struct ge
 
     /* Build execution message */
     struct gesture_exec_msg msg = {0};
+    msg.dev = dev;
     msg.binding_count = MIN(pattern->bindings_len, MAX_DEFERRED_BINDINGS);
     memcpy(msg.bindings, pattern->bindings,
            msg.binding_count * sizeof(struct zmk_behavior_binding));
@@ -393,7 +402,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
         data->acc_x = 0;
         data->acc_y = 0;
         data->sequence_len = 0;
-        data->current_node = gesture_trie_root;
+        data->current_node = data->gesture_trie_root;
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
@@ -500,6 +509,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
     }
 
     struct mouse_rel_msg msg = {
+        .dev = dev,
         .code = event->code,
         .value = event->value,
     };
@@ -520,7 +530,9 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
 
     struct input_processor_mouse_gesture_data *data = dev->data;
     const struct input_processor_mouse_gesture_config *config = dev->config;
-    build_gesture_trie(config->patterns, config->pattern_count);
+    data->gesture_nodes_count = 0;
+    data->gesture_trie_root = NULL;
+    build_gesture_trie(data, config->patterns, config->pattern_count);
 
     k_mutex_init(&data->lock);
 
@@ -536,7 +548,7 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     k_work_init_delayable(&data->idle_timeout_work, idle_timeout_work_handler);
     data->last_movement_time = 0;
 
-    data->current_node = gesture_trie_root;
+    data->current_node = data->gesture_trie_root;
     // Set device back-reference for access in work handlers
     data->dev = dev;
 
@@ -549,7 +561,7 @@ static void clear_gesture_data_locked(struct input_processor_mouse_gesture_data 
     data->acc_x = 0;
     data->acc_y = 0;
     data->sequence_len = 0;
-    data->current_node = gesture_trie_root;
+    data->current_node = data->gesture_trie_root;
 
     // Cancel any pending idle timeout
     k_work_cancel_delayable(&data->idle_timeout_work);
@@ -564,13 +576,19 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
         return ZMK_EV_EVENT_BUBBLE;
     }
 
-    struct state_action_msg msg = {
-        .activate = ev->is_active,
+#define MOUSE_GESTURE_DEV_ITEM(n) DEVICE_DT_INST_GET(n),
+    static const struct device *const mouse_gesture_devs[] = {
+        DT_INST_FOREACH_STATUS_OKAY(MOUSE_GESTURE_DEV_ITEM)
     };
 
-    /* Enqueue state change; drop if queue full */
-    if (k_msgq_put(&state_action_msgq, &msg, K_MSEC(10)) != 0) {
-        LOG_WRN("State action queue full – state change dropped");
+    for (size_t i = 0; i < ARRAY_SIZE(mouse_gesture_devs); i++) {
+        struct state_action_msg msg = {
+            .dev = mouse_gesture_devs[i],
+            .activate = ev->is_active,
+        };
+        if (k_msgq_put(&state_action_msgq, &msg, K_MSEC(10)) != 0) {
+            LOG_WRN("State action queue full – state change dropped");
+        }
     }
 
     /* Ensure work runs */
@@ -583,50 +601,43 @@ static const struct zmk_input_processor_driver_api input_processor_mouse_gesture
     .handle_event = input_processor_mouse_gesture_handle_event,
 };
 
-#define TRANSFORMED_BINDINGS(n)                                                                    \
-    { LISTIFY(DT_PROP_LEN(n, bindings), ZMK_KEYMAP_EXTRACT_BINDING, (, ), n) }
+#define BINDINGS_ARRAY(node_id) LISTIFY(DT_PROP_LEN(node_id, bindings), ZMK_KEYMAP_EXTRACT_BINDING, (, ), node_id)
 
-#define GESTURE_PATTERN_INST(n)                                                                    \
-    static const struct zmk_behavior_binding                                                       \
-        gesture_pattern_config_##n##_bindings[DT_PROP_LEN(n, bindings)] =                          \
-            TRANSFORMED_BINDINGS(n);                                                               \
-                                                                                                   \
-    static const struct gesture_pattern gesture_pattern_cfg_##n = {                                \
-        .bindings_len = DT_PROP_LEN(n, bindings),                                                  \
-        .bindings = gesture_pattern_config_##n##_bindings,                                         \
-        .pattern_len = DT_PROP_LEN(n, pattern),                                                    \
-        .wait_ms = DT_PROP_OR(n, wait_ms, CONFIG_ZMK_MACRO_DEFAULT_WAIT_MS),                       \
-        .tap_ms = DT_PROP_OR(n, tap_ms, CONFIG_ZMK_MACRO_DEFAULT_TAP_MS),                          \
-        .pattern = DT_PROP(n, pattern),                                                            \
-    };
+#define DECLARE_GESTURE_CHILD(node_id) \
+    static const struct zmk_behavior_binding gesture_pattern_bindings_##node_id[] = { BINDINGS_ARRAY(node_id) }; \
+    static const uint8_t gesture_pattern_seq_##node_id[] = DT_PROP(node_id, pattern);
 
-// Apply to all child nodes
-DT_INST_FOREACH_CHILD(0, GESTURE_PATTERN_INST)
+#define GESTURE_PATTERN_ENTRY(node_id)                                                    \
+    {                                                                                    \
+        .bindings_len = DT_PROP_LEN(node_id, bindings),                                   \
+        .bindings = gesture_pattern_bindings_##node_id,                                   \
+        .pattern_len = DT_PROP_LEN(node_id, pattern),                                     \
+        .wait_ms = DT_PROP_OR(node_id, wait_ms, CONFIG_ZMK_MACRO_DEFAULT_WAIT_MS),        \
+        .tap_ms = DT_PROP_OR(node_id, tap_ms, CONFIG_ZMK_MACRO_DEFAULT_TAP_MS),           \
+        .pattern = gesture_pattern_seq_##node_id,                                         \
+    },
 
-// Create array of pattern pointers
-#define GESTURE_PATTERN_ITEM(n) &gesture_pattern_cfg_##n,
-
-static const struct gesture_pattern *gesture_patterns[] = {DT_INST_FOREACH_CHILD(0, GESTURE_PATTERN_ITEM)};
-
-#define PATTERN_COUNT (ARRAY_SIZE(gesture_patterns))
-
-#define MOUSE_GESTURE_INPUT_PROCESSOR_INST(n)                                       \
-    static struct input_processor_mouse_gesture_data                                \
-        input_processor_mouse_gesture_data_##n = {};                                \
-    static const struct input_processor_mouse_gesture_config                        \
-        input_processor_mouse_gesture_config_##n = {                                \
-        .stroke_size = DT_INST_PROP_OR(n, stroke_size, 500),                        \
-        .movement_threshold = DT_INST_PROP_OR(n, movement_threshold, 10),           \
-        .gesture_cooldown_ms = DT_INST_PROP_OR(n, gesture_cooldown_ms, 500),        \
-        .enable_eager_mode = DT_INST_PROP_OR(n, enable_eager_mode, false),          \
-        .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 150),                \
-        .patterns = gesture_patterns,                                               \
-        .pattern_count = PATTERN_COUNT,                                             \
-    };                                                                              \
-    DEVICE_DT_INST_DEFINE(n, input_processor_mouse_gesture_init, NULL,              \
-                          &input_processor_mouse_gesture_data_##n,                  \
-                          &input_processor_mouse_gesture_config_##n, POST_KERNEL,   \
-                          CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,                      \
+#define MOUSE_GESTURE_INPUT_PROCESSOR_INST(n)                                                         \
+    DT_FOREACH_CHILD(DT_DRV_INST(n), DECLARE_GESTURE_CHILD)                                           \
+    static const struct gesture_pattern gesture_patterns_##n[] = {                                    \
+        DT_FOREACH_CHILD(DT_DRV_INST(n), GESTURE_PATTERN_ENTRY)                                       \
+    };                                                                                                \
+    static struct input_processor_mouse_gesture_data                                                  \
+        input_processor_mouse_gesture_data_##n = {};                                                  \
+    static const struct input_processor_mouse_gesture_config                                          \
+        input_processor_mouse_gesture_config_##n = {                                                  \
+        .stroke_size = DT_INST_PROP_OR(n, stroke_size, 500),                                          \
+        .movement_threshold = DT_INST_PROP_OR(n, movement_threshold, 10),                             \
+        .gesture_cooldown_ms = DT_INST_PROP_OR(n, gesture_cooldown_ms, 500),                          \
+        .enable_eager_mode = DT_INST_PROP_OR(n, enable_eager_mode, false),                            \
+        .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 150),                                  \
+        .patterns = gesture_patterns_##n,                                                             \
+        .pattern_count = ARRAY_SIZE(gesture_patterns_##n),                                            \
+    };                                                                                                \
+    DEVICE_DT_INST_DEFINE(n, input_processor_mouse_gesture_init, NULL,                                \
+                          &input_processor_mouse_gesture_data_##n,                                    \
+                          &input_processor_mouse_gesture_config_##n, POST_KERNEL,                     \
+                          CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,                                        \
                           &input_processor_mouse_gesture_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(MOUSE_GESTURE_INPUT_PROCESSOR_INST)
