@@ -228,7 +228,12 @@ static const struct gesture_pattern *match_gesture_pattern_locked(const struct d
 
     // Invoke by idle timeout if duplicate gesture found in eager mode
     if (config->enable_eager_mode && has_child && !clear_even_if_not_matched && config->idle_timeout_ms > 0) {
-        k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
+        int ret = k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
+        if (ret < 0) {
+            LOG_WRN("Failed to reschedule idle timeout work: %d", ret);
+        } else {
+            LOG_DBG("Idle timeout scheduled for %d ms", config->idle_timeout_ms);
+        }
         return NULL;
     }
 
