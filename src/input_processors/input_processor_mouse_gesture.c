@@ -28,12 +28,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
-
-
 #define ABS(x) ((x) < 0 ? -(x) : (x))
-#ifndef MIN
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#endif
 
 #define MAX_GESTURE_SEQUENCE_LENGTH 8
 #define MAX_GESTURE_PATTERNS 16
