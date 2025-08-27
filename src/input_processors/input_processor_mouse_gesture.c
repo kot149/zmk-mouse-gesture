@@ -406,21 +406,13 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
-    // Only process relative x/y events
-    if (!(event->type == INPUT_EV_REL && (event->code == INPUT_REL_X || event->code == INPUT_REL_Y))) {
-        return ZMK_INPUT_PROC_CONTINUE;
-    }
-
-    // Cut off small movements
-    if (ABS(event->value) < config->movement_threshold) {
-        return ZMK_INPUT_PROC_CONTINUE;
-    }
-
     // Accumulate with overflow protection
     if (event->code == INPUT_REL_X) {
         accumulate_movement_safe(&data->acc_x, event->value, "X");
     } else if (event->code == INPUT_REL_Y) {
         accumulate_movement_safe(&data->acc_y, event->value, "Y");
+    } else {
+        // this should never happen
     }
 
     // Update last movement time and restart idle timer if needed
@@ -502,7 +494,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
-    /* Ignore small movements here – same check will run later under lock but reduces queue spam */
+    /* Ignore small movements  */
     const struct input_processor_mouse_gesture_config *config = dev->config;
     if (ABS(event->value) < config->movement_threshold) {
         return ZMK_INPUT_PROC_CONTINUE;
