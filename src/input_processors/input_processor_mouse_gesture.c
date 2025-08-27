@@ -256,7 +256,6 @@ static void idle_timeout_work_handler(struct k_work *work) {
         return;
     }
 
-    /* Directly attempt to match gesture pattern instead of waking a dedicated thread */
     if (k_mutex_lock(&data->lock, K_MSEC(50)) == 0) {
         if (data->is_active && data->sequence_len > 0) {
             match_gesture_pattern_locked(dev, true);
