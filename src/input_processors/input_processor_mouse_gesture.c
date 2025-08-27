@@ -297,6 +297,7 @@ static void gesture_exec_work_cb(struct k_work *work) {
                 .value = m_msg.value,
             };
             input_processor_mouse_gesture_handle_event_locked(dev, &ev);
+            // Execute gesture pattern matching if eager mode is enabled
             if (((const struct input_processor_mouse_gesture_config *)dev->config)->enable_eager_mode) {
                 match_gesture_pattern_locked(dev, false);
             }
@@ -418,7 +419,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     // Update last movement time and restart idle timer if needed
     data->last_movement_time = current_time;
 
-    // Start/restart idle timeout if configured and not in eager mode
+    // Reschedule idle timeout if configured and not in eager mode
     if (config->idle_timeout_ms > 0 && !config->enable_eager_mode && data->sequence_len > 0) {
         int ret = k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
         if (ret < 0) {
