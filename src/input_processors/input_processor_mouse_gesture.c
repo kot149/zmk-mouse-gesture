@@ -50,8 +50,7 @@ struct input_processor_mouse_gesture_data {
     bool is_active;
     int32_t acc_x;
     int32_t acc_y;
-    uint8_t sequence[MAX_GESTURE_SEQUENCE_LENGTH];
-    uint8_t sequence_len;
+    uint8_t last_direction;
     int64_t last_gesture_time;
     uint32_t event_count;
     int64_t last_reset_time;
@@ -257,7 +256,7 @@ static void idle_timeout_work_handler(struct k_work *work) {
     }
 
     if (k_mutex_lock(&data->lock, K_MSEC(50)) == 0) {
-        if (data->is_active && data->sequence_len > 0) {
+        if (data->is_active && data->current_node && data->current_node != data->gesture_trie_root) {
             match_gesture_pattern_locked(dev, true);
         }
         k_mutex_unlock(&data->lock);
@@ -393,7 +392,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     data->event_count++;
     if (data->event_count > 1000) {  // Prevent event loops
         LOG_ERR("Too many events in short time, possible loop detected");
-        data->sequence_len = 0;
+        data->current_node = data->gesture_trie_root;
         data->event_count = 0;
         return ZMK_INPUT_PROC_CONTINUE;
     }
@@ -406,7 +405,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     if (!data->is_active) {
         data->acc_x = 0;
         data->acc_y = 0;
-        data->sequence_len = 0;
+        data->last_direction = GESTURE_NONE;
         data->current_node = data->gesture_trie_root;
         return ZMK_INPUT_PROC_CONTINUE;
     }
@@ -424,7 +423,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     data->last_movement_time = current_time;
 
     // Reschedule idle timeout if configured and not in eager mode
-    if (config->idle_timeout_ms > 0 && !config->enable_eager_mode && data->sequence_len > 0) {
+    if (config->idle_timeout_ms > 0 && !config->enable_eager_mode && data->current_node && data->current_node != data->gesture_trie_root) {
         int ret = k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
         if (ret < 0) {
             LOG_WRN("Failed to reschedule idle timeout work: %d", ret);
@@ -444,36 +443,35 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
 
     if (direction != GESTURE_NONE) {
         // Ignore duplicate direction
-        if (data->sequence_len > 0 && data->sequence[data->sequence_len - 1] == direction) {
+        if (data->last_direction == direction) {
             LOG_DBG("Ignoring duplicate direction %d", direction);
         } else {
-            // Add direction to sequence
-            if (data->sequence_len < MAX_GESTURE_SEQUENCE_LENGTH) {
-                data->sequence[data->sequence_len++] = direction;
-                LOG_DBG("Added direction %d to sequence (length: %d)", direction, data->sequence_len);
-                int dir_idx = direction_to_index(direction);
-                if (data->current_node && dir_idx >= 0) {
-                    data->current_node = data->current_node->child[dir_idx];
+            int dir_idx = direction_to_index(direction);
+            if (data->current_node && dir_idx >= 0) {
+                struct gesture_node *next_node = data->current_node->child[dir_idx];
+                if (next_node) {
+                    // Start idle timeout if configured and not in eager mode and this is the first direction
+                    if (config->idle_timeout_ms > 0 && !config->enable_eager_mode && data->current_node == data->gesture_trie_root) {
+                        int ret = k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
+                        if (ret < 0) {
+                            LOG_WRN("Failed to reschedule idle timeout work: %d", ret);
+                        } else {
+                            LOG_DBG("Idle timeout scheduled for %d ms after first direction", config->idle_timeout_ms);
+                        }
+                    }
+
+                    data->current_node = next_node;
+                    data->last_direction = direction;
+                    LOG_DBG("Moved to next node for direction %d", direction);
                 } else {
-                    data->current_node = NULL;
-                }
-                if (data->current_node == NULL) {
+                    LOG_DBG("No valid transition for direction %d, clearing gesture", direction);
                     clear_gesture_data_locked(data);
                     return ZMK_INPUT_PROC_CONTINUE;
                 }
-
-                // Start idle timeout if configured and not in eager mode and this is the first direction
-                if (config->idle_timeout_ms > 0 && !config->enable_eager_mode && data->sequence_len == 1) {
-                    int ret = k_work_reschedule(&data->idle_timeout_work, K_MSEC(config->idle_timeout_ms));
-                    if (ret < 0) {
-                        LOG_WRN("Failed to reschedule idle timeout work: %d", ret);
-                    } else {
-                        LOG_DBG("Idle timeout scheduled for %d ms after first direction", config->idle_timeout_ms);
-                    }
-                }
             } else {
-                LOG_WRN("Gesture sequence too long, clearing");
-                data->sequence_len = 0;
+                LOG_DBG("Invalid current node or direction %d, clearing gesture", direction);
+                clear_gesture_data_locked(data);
+                return ZMK_INPUT_PROC_CONTINUE;
             }
         }
 
@@ -536,7 +534,7 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
     data->is_active = false;
     data->acc_x = 0;
     data->acc_y = 0;
-    data->sequence_len = 0;
+    data->last_direction = GESTURE_NONE;
     data->last_gesture_time = 0;
     data->event_count = 0;
     data->last_reset_time = k_uptime_get();
@@ -557,7 +555,7 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
 static void clear_gesture_data_locked(struct input_processor_mouse_gesture_data *data) {
     data->acc_x = 0;
     data->acc_y = 0;
-    data->sequence_len = 0;
+    data->last_direction = GESTURE_NONE;
     data->current_node = data->gesture_trie_root;
 
     // Cancel any pending idle timeout
