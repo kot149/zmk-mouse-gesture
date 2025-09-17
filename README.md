@@ -2,11 +2,6 @@
 
 A ZMK module that converts combinations of 4-direction mouse strokes into key presses or any other behaviors.
 
-> [!warning]
-> 🚧 This module is still under development. 🚧
->
-> Its behavior is not stable and may cause the keyboard to crash. Its behavior and API may change without notice.
-
 ## Installation
 
 Add the Module to your `west.yml`.
@@ -104,7 +99,7 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 
 - `stroke-size` (default: 500): Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
 - `idle-timeout-ms` (default: 150): Time in milliseconds to wait for idle before invoking the bindings. When set to 0, idle timeout is disabled.
-- `enable-eager-mode` (default: false): Invoke bindings immediately when gesture pattern is matched. (Duplicate gestures are resolved by invoking after idle timeout, which will be canceled if longer gesture is detected within the timeout, while non-duplicate gestures are invoked immediately.) When disabled, bindings will only be invoked when idle timeout triggers or the activation key is released.
+- `enable-eager-mode` (default: false): Invoke bindings immediately when gesture pattern is matched. Duplicate gesture patterns (cases where a pattern is a subset of another pattern, for example, `<GESTURE_RIGHT>` and `<GESTURE_RIGHT GESTURE_DOWN>`) are resolved by invoking after idle timeout, which will be canceled if longer pattern is detected within the timeout, while non-duplicate gestures are invoked immediately. When disabled, bindings will only be invoked when idle timeout triggers or the activation key is released.
 - `movement-threshold` (default: 10): Threshold for each x/y event.
 - `gesture-cooldown-ms` (default: 500): Time in milliseconds to stop processing for next gesture after the execution of a gesture. This is useful to prevent unexpected double gestures.
 
@@ -114,9 +109,9 @@ Activate gesture by pressing the activation key and perform the gesture.
 
 ## Advanced Usage
 
-- **Automatic Activation**: use [zmk-listeners](https://github.com/ssbb/zmk-listeners) to activate the gesture automatically on specific layers
+- **Automatic Activation**: use [zmk-listeners](https://github.com/ssbb/zmk-listeners) to activate the gesture automatically on specific layers, and additionally, use `zip_temp_layer` to automatically activate the layer
 
-- **Activate with existing keys**: use [zmk-listeners](https://github.com/ssbb/zmk-listeners) to activate the gesture with existing keys
+- **Activate with existing keys**: create a macro that involves activation keys, or use [zmk-listeners](https://github.com/ssbb/zmk-listeners), to activate the gesture with existing keys
 
 - **Layer-specific gestures**: define [layer-spesific input processors](https://zmk.dev/docs/keymaps/input-processors/usage#layer-specific-overrides) to trigger different gestures on different layers
 
@@ -129,7 +124,7 @@ Converts mouse movement into key presses (e.g., arrow keys).
 While both keybind and mouse-gesture modules handle mouse move events and trigger behaviors, they serve different purposes:
 
 - **keybind**: Direct, continuous conversion of mouse movement to key presses
-- **mouse-gesture**: Pattern recognition that triggers single-shot behaviors based on gesture sequences
+- **mouse-gesture**: Pattern recognition that triggers single-shot behaviors based on the gestures drawn
 
 ### [input-processor-behaviors](https://zmk.dev/docs/keymaps/input-processors/behaviors)
 
