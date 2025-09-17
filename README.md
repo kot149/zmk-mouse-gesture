@@ -61,7 +61,7 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 #include <mouse-gesture.dtsi>
 
 &zip_mouse_gesture {
-    stroke-size = <300>; // Optional (default: 500)
+    stroke-size = <300>; // Optional (default: 200)
     enable-eager-mode; // Optional, but recommended
 
     history_back {
@@ -82,8 +82,6 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
     new_tab {
         pattern = <GESTURE_DOWN GESTURE_LEFT>;
         bindings = <&kp LC(T)>;
-        wait-ms = <20>;  // Optional: wait time between behaviors (default: CONFIG_ZMK_MACRO_DEFAULT_WAIT_MS)
-        tap-ms = <40>;   // Optional: press duration for each behavior (default: CONFIG_ZMK_MACRO_DEFAULT_TAP_MS)
     };
 };
 
@@ -97,7 +95,7 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 
 #### Options
 
-- `stroke-size` (default: 500): Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
+- `stroke-size` (default: 200): Size of one stroke in a gesture. Note that larger stroke than this value is fine, as duplicate directions will be ignored.
 - `idle-timeout-ms` (default: 150): Time in milliseconds to wait for idle before invoking the bindings. When set to 0, idle timeout is disabled.
 - `enable-eager-mode` (default: false): Invoke bindings immediately when gesture pattern is matched. Duplicate gesture patterns (cases where a pattern is a subset of another pattern, for example, `<GESTURE_RIGHT>` and `<GESTURE_RIGHT GESTURE_DOWN>`) are resolved by invoking after idle timeout, which will be canceled if longer pattern is detected within the timeout, while non-duplicate gestures are invoked immediately. When disabled, bindings will only be invoked when idle timeout triggers or the activation key is released.
 - `movement-threshold` (default: 10): Threshold for each x/y event.

@@ -615,7 +615,7 @@ static const struct zmk_input_processor_driver_api input_processor_mouse_gesture
         input_processor_mouse_gesture_data_##n = {};                                                  \
     static const struct input_processor_mouse_gesture_config                                          \
         input_processor_mouse_gesture_config_##n = {                                                  \
-        .stroke_size = DT_INST_PROP_OR(n, stroke_size, 500),                                          \
+        .stroke_size = DT_INST_PROP_OR(n, stroke_size, 200),                                          \
         .movement_threshold = DT_INST_PROP_OR(n, movement_threshold, 10),                             \
         .gesture_cooldown_ms = DT_INST_PROP_OR(n, gesture_cooldown_ms, 500),                          \
         .enable_eager_mode = DT_INST_PROP_OR(n, enable_eager_mode, false),                            \
