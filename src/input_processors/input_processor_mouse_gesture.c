@@ -13,6 +13,7 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/util_macro.h>
 #include <drivers/input_processor.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <limits.h>
 #include <string.h>
@@ -27,8 +28,6 @@
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
-
-#define ABS(x) ((x) < 0 ? -(x) : (x))
 
 #define MAX_GESTURE_SEQUENCE_LENGTH 8
 #define MAX_GESTURE_PATTERNS 16
@@ -176,7 +175,7 @@ static void clear_gesture_data_locked(struct input_processor_mouse_gesture_data 
 
 static uint8_t detect_direction(int32_t x, int32_t y) {
 
-    if (ABS(x) > ABS(y)) {
+    if (abs(x) > abs(y)) {
         return GESTURE_X(x);
     } else {
         return GESTURE_Y(y);
@@ -428,7 +427,7 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     }
 
     // Accumulate until stroke size is reached
-    uint32_t total_distance = ABS(data->acc_x) + ABS(data->acc_y);
+    uint32_t total_distance = abs(data->acc_x) + abs(data->acc_y);
 
     if (total_distance < config->stroke_size) {
         return ZMK_INPUT_PROC_CONTINUE;
@@ -494,7 +493,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
 
     /* Ignore small movements  */
     const struct input_processor_mouse_gesture_config *config = dev->config;
-    if (ABS(event->value) < config->movement_threshold) {
+    if (abs(event->value) < config->movement_threshold) {
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
