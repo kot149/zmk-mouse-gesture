@@ -40,4 +40,18 @@
         #binding-cells = <0>;
         toggle-mode = "off";   // Always disable
     };
+
+    /omit-if-no-ref/ mouse_gesture_kp: mouse_gesture_kp {
+        compatible = "zmk,behavior-hold-tap";
+        bindings = <&mouse_gesture>, <&kp>;
+
+        #binding-cells = <2>;
+    };
+
+    /omit-if-no-ref/ mouse_gesture_mkp: mouse_gesture_mkp {
+        compatible = "zmk,behavior-hold-tap";
+        bindings = <&mouse_gesture>, <&mkp>;
+
+        #binding-cells = <2>;
+    };
 };

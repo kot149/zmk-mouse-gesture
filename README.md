@@ -47,6 +47,8 @@ manifest:
                 &mouse_gesture_on // Activates mouse gesture on each press
                 &mouse_gesture_off // Deactivates mouse gesture on each press
                 &mouse_gesture_toggle // Toggle mouse gesture on/off on each press
+                &mouse_gesture_kp 0 A // Activates mouse gesture while held, and triggers &kp A on tap
+                &mouse_gesture_mkp 0 RCLK // Activates mouse gesture while held, and triggers right click on tap
             >;
         };
     };
