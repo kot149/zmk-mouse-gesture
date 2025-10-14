@@ -2,6 +2,10 @@
 
 A ZMK module that converts combinations of 4-direction mouse strokes into key presses or any other behaviors.
 
+## Demo
+
+https://github.com/user-attachments/assets/f425d315-659b-4f1e-9d21-6451eb60e168
+
 ## Installation
 
 Add the Module to your `west.yml`.
