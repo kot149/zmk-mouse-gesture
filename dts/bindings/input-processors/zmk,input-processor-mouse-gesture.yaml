@@ -25,6 +25,14 @@ properties:
     default: 10
     description: "Threshold for each x/y event"
 
+  rel-x-code:
+    type: int
+    description: "Input event code to treat as the relative X axis. Defaults to INPUT_REL_X when omitted."
+
+  rel-y-code:
+    type: int
+    description: "Input event code to treat as the relative Y axis. Defaults to INPUT_REL_Y when omitted."
+
   enable-eager-mode:
     type: boolean
     description: "Execute pattern matching in real-time and invoke bindings immediately when gesture pattern is matched. (Duplicate gestures are resolved by invoking after idle timeout, which will be canceled if longer gesture is detected within the timeout, while non-duplicate gestures are invoked immediately.) When disabled, pattern match will only be performed when idle timeout triggers or the activation key is released."

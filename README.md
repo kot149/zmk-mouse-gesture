@@ -65,10 +65,14 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 
 ```dts
 #include <mouse-gesture.dtsi>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
 
 &zip_mouse_gesture {
     stroke-size = <300>; // Optional (default: 200)
     enable-eager-mode; // Optional, but recommended
+
+    // rel-x-code = <INPUT_REL_X>; // Optional (default: INPUT_REL_X)
+    // rel-y-code = <INPUT_REL_Y>; // Optional (default: INPUT_REL_Y)
 
     history_back {
         pattern = <GESTURE_RIGHT>;
@@ -105,6 +109,8 @@ Define the gesture patterns in `&zip_mouse_gesture`and add it to the input proce
 - `idle-timeout-ms` (default: 150): Time in milliseconds to wait for idle before invoking the bindings. When set to 0, idle timeout is disabled.
 - `enable-eager-mode` (default: false): Invoke bindings immediately when gesture pattern is matched. Duplicate gesture patterns (cases where a pattern is a subset of another pattern, for example, `<GESTURE_RIGHT>` and `<GESTURE_RIGHT GESTURE_DOWN>`) are resolved by invoking after idle timeout, which will be canceled if longer pattern is detected within the timeout, while non-duplicate gestures are invoked immediately. When disabled, bindings will only be invoked when idle timeout triggers or the activation key is released.
 - `movement-threshold` (default: 10): Threshold for each x/y event.
+- `rel-x-code` (default: `INPUT_REL_X`): Input event code treated as the relative X axis.
+- `rel-y-code` (default: `INPUT_REL_Y`): Input event code treated as the relative Y axis.
 - `gesture-cooldown-ms` (default: 500): Time in milliseconds to stop processing for next gesture after the execution of a gesture. This is useful to prevent unexpected double gestures.
 
 ### 5. Perform the gesture
