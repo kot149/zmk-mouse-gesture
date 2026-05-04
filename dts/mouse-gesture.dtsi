@@ -14,8 +14,8 @@
         // stroke-size = <500>;
         // movement-threshold = <10>;
         // always-active;
-        // rel-x-code = <INPUT_REL_X>;
-        // rel-y-code = <INPUT_REL_Y>;
+        // event-code-x = <INPUT_REL_X>;
+        // event-code-y = <INPUT_REL_Y>;
         // idle-timeout-ms = <150>;
         // gesture-cooldown-ms = <500>;
     };

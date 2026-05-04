@@ -73,8 +73,8 @@ Define the gesture patterns in `&zip_mouse_gesture` and add it to the input proc
     enable-eager-mode; // Optional, but recommended
     // always-active; // Optional
 
-    // rel-x-code = <INPUT_REL_X>; // Optional (default: INPUT_REL_X)
-    // rel-y-code = <INPUT_REL_Y>; // Optional (default: INPUT_REL_Y)
+    // event-code-x = <INPUT_REL_X>; // Optional (default: INPUT_REL_X)
+    // event-code-y = <INPUT_REL_Y>; // Optional (default: INPUT_REL_Y)
 
     history_back {
         pattern = <GESTURE_RIGHT>;
@@ -112,8 +112,8 @@ Define the gesture patterns in `&zip_mouse_gesture` and add it to the input proc
 - `enable-eager-mode` (default: false): Invoke bindings immediately when gesture pattern is matched. Duplicate gesture patterns (cases where a pattern is a subset of another pattern, for example, `<GESTURE_RIGHT>` and `<GESTURE_RIGHT GESTURE_DOWN>`) are resolved by invoking after idle timeout, which will be canceled if longer pattern is detected within the timeout, while non-duplicate gestures are invoked immediately. When disabled, bindings will only be invoked when idle timeout triggers or the activation key is released.
 - `always-active` (default: false): Keep gesture recognition enabled without requiring activation keys. This is useful for pointing devices dedicated to gestures. When enabled, activation keys such as `&mouse_gesture`, `&mouse_gesture_on`, `&mouse_gesture_off`, and `&mouse_gesture_toggle` will be ignored for this processor.
 - `movement-threshold` (default: 0): Threshold for each x/y event.
-- `rel-x-code` (default: `INPUT_REL_X`): Input event code treated as the relative X axis.
-- `rel-y-code` (default: `INPUT_REL_Y`): Input event code treated as the relative Y axis.
+- `event-code-x` (default: `INPUT_REL_X`): Input event code treated as the relative X axis.
+- `event-code-y` (default: `INPUT_REL_Y`): Input event code treated as the relative Y axis.
 - `gesture-cooldown-ms` (default: 500): Time in milliseconds to stop processing for next gesture after the execution of a gesture. This is useful to prevent unexpected double gestures.
 
 ### 5. Perform the gesture

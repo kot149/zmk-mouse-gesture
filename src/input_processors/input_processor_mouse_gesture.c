@@ -167,8 +167,8 @@ struct input_processor_mouse_gesture_config {
     bool enable_eager_mode;  // Execute bindings immediately when gesture pattern is matched
     bool always_active;
     uint32_t idle_timeout_ms;  // Time to wait for idle before invoking gesture
-    uint16_t rel_x_code;
-    uint16_t rel_y_code;
+    uint16_t event_code_x;
+    uint16_t event_code_y;
     const struct gesture_pattern *patterns;  // Array of pointers to patterns
     size_t pattern_count;
 };
@@ -410,9 +410,9 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     }
 
     // Accumulate with overflow protection
-    if (event->code == config->rel_x_code) {
+    if (event->code == config->event_code_x) {
         accumulate_movement_safe(&data->acc_x, event->value, "X");
-    } else if (event->code == config->rel_y_code) {
+    } else if (event->code == config->event_code_y) {
         accumulate_movement_safe(&data->acc_y, event->value, "Y");
     } else {
         // this should never happen
@@ -493,7 +493,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
     /* Only care about the configured relative axis events */
     const struct input_processor_mouse_gesture_config *config = dev->config;
     if (!(event->type == INPUT_EV_REL &&
-          (event->code == config->rel_x_code || event->code == config->rel_y_code))) {
+          (event->code == config->event_code_x || event->code == config->event_code_y))) {
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
@@ -626,8 +626,8 @@ static const struct zmk_input_processor_driver_api input_processor_mouse_gesture
         .enable_eager_mode = DT_INST_PROP_OR(n, enable_eager_mode, false),                            \
         .always_active = DT_INST_PROP_OR(n, always_active, false),                                    \
         .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 150),                                  \
-        .rel_x_code = (uint16_t)DT_INST_PROP_OR(n, rel_x_code, INPUT_REL_X),                          \
-        .rel_y_code = (uint16_t)DT_INST_PROP_OR(n, rel_y_code, INPUT_REL_Y),                          \
+        .event_code_x = (uint16_t)DT_INST_PROP_OR(n, event_code_x, INPUT_REL_X),                          \
+        .event_code_y = (uint16_t)DT_INST_PROP_OR(n, event_code_y, INPUT_REL_Y),                          \
         .patterns = gesture_patterns_##n,                                                             \
         .pattern_count = ARRAY_SIZE(gesture_patterns_##n),                                            \
     };                                                                                                \
