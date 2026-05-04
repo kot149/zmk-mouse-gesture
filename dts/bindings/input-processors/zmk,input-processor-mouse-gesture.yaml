@@ -25,6 +25,10 @@ properties:
     default: 10
     description: "Threshold for each x/y event"
 
+  always-active:
+    type: boolean
+    description: "Keep gesture recognition enabled without requiring activation keys. This is useful for pointing devices dedicated to gestures. When enabled, activation keys such as `&mouse_gesture`, `&mouse_gesture_on`, `&mouse_gesture_off`, and `&mouse_gesture_toggle` will be ignored for this processor."
+
   rel-x-code:
     type: int
     description: "Input event code to treat as the relative X axis. Defaults to INPUT_REL_X when omitted."

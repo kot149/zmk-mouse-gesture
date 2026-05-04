@@ -165,6 +165,7 @@ struct input_processor_mouse_gesture_config {
     uint32_t movement_threshold;
     uint32_t gesture_cooldown_ms;  // Cooldown period between gestures
     bool enable_eager_mode;  // Execute bindings immediately when gesture pattern is matched
+    bool always_active;
     uint32_t idle_timeout_ms;  // Time to wait for idle before invoking gesture
     uint16_t rel_x_code;
     uint16_t rel_y_code;
@@ -269,13 +270,15 @@ static void gesture_exec_work_cb(struct k_work *work) {
         if (!dev) {
             continue;
         }
+        const struct input_processor_mouse_gesture_config *config = dev->config;
         struct input_processor_mouse_gesture_data *data = dev->data;
         if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
             bool old_state = data->is_active;
-            data->is_active = s_msg.activate;
-            if (old_state && !s_msg.activate) { // Deactivated
+            bool new_state = config->always_active ? true : s_msg.activate;
+            data->is_active = new_state;
+            if (old_state && !new_state) { // Deactivated
                 match_gesture_pattern_locked(dev, true);
-            } else if (!old_state && s_msg.activate) { // activated
+            } else if (!old_state && new_state) { // activated
                 clear_gesture_data_locked(data);
             }
             k_mutex_unlock(&data->lock);
@@ -527,7 +530,7 @@ static int input_processor_mouse_gesture_init(const struct device *dev) {
 
     k_mutex_init(&data->lock);
 
-    data->is_active = false;
+    data->is_active = config->always_active;
     data->acc_x = 0;
     data->acc_y = 0;
     data->last_direction = GESTURE_NONE;
@@ -621,6 +624,7 @@ static const struct zmk_input_processor_driver_api input_processor_mouse_gesture
         .movement_threshold = DT_INST_PROP_OR(n, movement_threshold, 10),                             \
         .gesture_cooldown_ms = DT_INST_PROP_OR(n, gesture_cooldown_ms, 500),                          \
         .enable_eager_mode = DT_INST_PROP_OR(n, enable_eager_mode, false),                            \
+        .always_active = DT_INST_PROP_OR(n, always_active, false),                                    \
         .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 150),                                  \
         .rel_x_code = (uint16_t)DT_INST_PROP_OR(n, rel_x_code, INPUT_REL_X),                          \
         .rel_y_code = (uint16_t)DT_INST_PROP_OR(n, rel_y_code, INPUT_REL_Y),                          \

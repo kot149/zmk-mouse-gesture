@@ -13,6 +13,7 @@
 
         // stroke-size = <500>;
         // movement-threshold = <10>;
+        // always-active;
         // rel-x-code = <INPUT_REL_X>;
         // rel-y-code = <INPUT_REL_Y>;
         // idle-timeout-ms = <150>;
