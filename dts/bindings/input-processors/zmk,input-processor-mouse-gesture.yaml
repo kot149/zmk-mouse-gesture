@@ -22,7 +22,7 @@ properties:
 
   movement-threshold:
     type: int
-    default: 10
+    default: 0
     description: "Threshold for each x/y event"
 
   always-active:
