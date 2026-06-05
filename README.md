@@ -72,6 +72,7 @@ Define the gesture patterns in `&zip_mouse_gesture` and add it to the input proc
     stroke-size = <300>; // Optional (default: 200)
     enable-eager-mode; // Optional, but recommended
     // always-active; // Optional
+    // suppress-movement; // Optional
 
     // event-code-x = <INPUT_REL_X>; // Optional (default: INPUT_REL_X)
     // event-code-y = <INPUT_REL_Y>; // Optional (default: INPUT_REL_Y)
@@ -111,6 +112,7 @@ Define the gesture patterns in `&zip_mouse_gesture` and add it to the input proc
 - `idle-timeout-ms` (default: 150): Time in milliseconds to wait for idle before invoking the bindings. When set to 0, idle timeout is disabled.
 - `enable-eager-mode` (default: false): Invoke bindings immediately when gesture pattern is matched. Duplicate gesture patterns (cases where a pattern is a subset of another pattern, for example, `<GESTURE_RIGHT>` and `<GESTURE_RIGHT GESTURE_DOWN>`) are resolved by invoking after idle timeout, which will be canceled if longer pattern is detected within the timeout, while non-duplicate gestures are invoked immediately. When disabled, bindings will only be invoked when idle timeout triggers or the activation key is released.
 - `always-active` (default: false): Keep gesture recognition enabled without requiring activation keys. This is useful for pointing devices dedicated to gestures. When enabled, activation keys such as `&mouse_gesture`, `&mouse_gesture_on`, `&mouse_gesture_off`, and `&mouse_gesture_toggle` will be ignored for this processor.
+- `suppress-movement` (default: false): Suppress cursor movement events while gesture recognition is active. When enabled, X/Y events configured by `event-code-x` and `event-code-y` are consumed by this processor and not propagated downstream while gesture recognition is active.
 - `movement-threshold` (default: 0): Threshold for each x/y event.
 - `event-code-x` (default: `INPUT_REL_X`): Input event code treated as the relative X axis.
 - `event-code-y` (default: `INPUT_REL_Y`): Input event code treated as the relative Y axis.

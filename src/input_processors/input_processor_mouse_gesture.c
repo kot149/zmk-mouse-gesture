@@ -166,6 +166,7 @@ struct input_processor_mouse_gesture_config {
     uint32_t gesture_cooldown_ms;  // Cooldown period between gestures
     bool enable_eager_mode;  // Execute bindings immediately when gesture pattern is matched
     bool always_active;
+    bool suppress_movement;  // Consume X/Y events while gesture is active
     uint32_t idle_timeout_ms;  // Time to wait for idle before invoking gesture
     uint16_t event_code_x;
     uint16_t event_code_y;
@@ -515,6 +516,13 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
 
     k_work_submit(&gesture_exec_work);
 
+    if (config->suppress_movement) {
+        struct input_processor_mouse_gesture_data *data = dev->data;
+        if (data->is_active) {
+            return ZMK_INPUT_PROC_STOP;
+        }
+    }
+
     return ZMK_INPUT_PROC_CONTINUE;
 }
 
@@ -625,6 +633,7 @@ static const struct zmk_input_processor_driver_api input_processor_mouse_gesture
         .gesture_cooldown_ms = DT_INST_PROP_OR(n, gesture_cooldown_ms, 500),                          \
         .enable_eager_mode = DT_INST_PROP_OR(n, enable_eager_mode, false),                            \
         .always_active = DT_INST_PROP_OR(n, always_active, false),                                    \
+        .suppress_movement = DT_INST_PROP_OR(n, suppress_movement, false),                            \
         .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 150),                                  \
         .event_code_x = (uint16_t)DT_INST_PROP_OR(n, event_code_x, INPUT_REL_X),                          \
         .event_code_y = (uint16_t)DT_INST_PROP_OR(n, event_code_y, INPUT_REL_Y),                          \

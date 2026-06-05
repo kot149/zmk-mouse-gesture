@@ -46,6 +46,10 @@ properties:
     default: 150
     description: "Time in milliseconds to wait for idle before invoking gesture. When set to 0, idle timeout is disabled."
 
+  suppress-movement:
+    type: boolean
+    description: "Suppress cursor movement events while gesture recognition is active. When enabled, X/Y events configured by `event-code-x` and `event-code-y` are consumed by this processor and not propagated downstream while gesture recognition is active."
+
   gesture-cooldown-ms:
     type: int
     default: 500
