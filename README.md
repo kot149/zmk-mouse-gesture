@@ -125,11 +125,9 @@ Or, if you set `always-active`, simply perform the gesture without pressing the 
 
 ## Advanced Usage
 
-- **Automatic Activation**: use [zmk-listeners](https://github.com/ssbb/zmk-listeners) to activate the gesture automatically on specific layers, and additionally, use `zip_temp_layer` to automatically activate the layer
-
 - **Activate with existing keys**: create a macro that involves activation keys, or use [zmk-listeners](https://github.com/ssbb/zmk-listeners), to activate the gesture with existing keys
 
-- **Layer-specific gestures**: define [layer-spesific input processors](https://zmk.dev/docs/keymaps/input-processors/usage#layer-specific-overrides) to trigger different gestures on different layers
+- **Layer-specific gestures**: define [layer-spesific input processors](https://zmk.dev/docs/keymaps/input-processors/usage#layer-specific-overrides) to trigger different gestures on different layers, or combine with `always-active` to automatically start gesture recognition on specific layers
 
 ## Related Works
 
