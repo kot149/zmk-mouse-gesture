@@ -51,6 +51,20 @@ properties:
     default: 400
     description: "Discard a partially accumulated gesture after this many milliseconds without movement. Movement that never reaches `stroke-size` is otherwise kept indefinitely and later combines with unrelated movement, resolving to the wrong direction. Set to 0 to disable. Must be comfortably longer than the pause between strokes of a multi-stroke gesture."
 
+  active-layers:
+    type: int
+    default: 0
+    description: |
+      Bitmask of the layers this instance acts on; bit 0 is layer 0. Zero, the
+      default, means every layer. Lets several instances share one input
+      listener without layer overrides, which is what makes the layer-to-set
+      mapping changeable at runtime rather than fixed at build time.
+
+  display-name:
+    type: string
+    description: |
+      Label for configuration UIs. Defaults to the node name.
+
   suppress-movement:
     type: boolean
     description: "Suppress cursor movement events while gesture recognition is active. When enabled, X/Y events configured by `event-code-x` and `event-code-y` are consumed by this processor and not propagated downstream while gesture recognition is active."

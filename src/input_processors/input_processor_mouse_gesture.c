@@ -24,6 +24,9 @@
 #include <zmk/behavior_queue.h>
 #include <drivers/behavior.h>
 #include <zmk/events/mouse_gesture_state_changed.h>
+#include <zmk/mouse_gesture.h>
+#include <zephyr/settings/settings.h>
+#include <stdio.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -50,6 +53,8 @@ struct input_processor_mouse_gesture_data {
     struct gesture_node *current_node;
     const struct device *dev;
 
+    uint32_t active_layers;      // Runtime override of config->active_layers
+    bool active_layers_set;      // Whether the override above is in force
     size_t gesture_nodes_count;
     struct gesture_node *gesture_trie_root;
 };
@@ -157,6 +162,9 @@ struct input_processor_mouse_gesture_config {
     bool enable_eager_mode;  // Execute bindings immediately when gesture pattern is matched
     bool always_active;
     bool suppress_movement;  // Consume X/Y events while gesture is active
+    uint32_t active_layers;  // Bitmask of layers this instance runs on; 0 = all
+    const char *display_name;
+    uint8_t index;
     uint32_t idle_timeout_ms;  // Time to wait for idle before invoking gesture
     uint32_t partial_gesture_timeout_ms; // Discard a stale in-progress gesture after this much idle time
     uint16_t event_code_x;
@@ -495,6 +503,111 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     return ZMK_INPUT_PROC_CONTINUE;
 }
 
+/* Instances in devicetree order, so one can be addressed by index over RPC. */
+#define MOUSE_GESTURE_DEV_ENTRY(n) DEVICE_DT_INST_GET(n),
+static const struct device *const mouse_gesture_instances[] = {
+    DT_INST_FOREACH_STATUS_OKAY(MOUSE_GESTURE_DEV_ENTRY)};
+
+#define ACTIVE_LAYERS_SETTINGS_PREFIX "mg_layers"
+
+static uint32_t effective_active_layers(const struct device *dev) {
+    const struct input_processor_mouse_gesture_config *config = dev->config;
+    const struct input_processor_mouse_gesture_data *data = dev->data;
+
+    return data->active_layers_set ? data->active_layers : config->active_layers;
+}
+
+static bool layers_allow(const struct device *dev) {
+    uint32_t mask = effective_active_layers(dev);
+
+    /* Zero means "wherever the pointer is", which is what a keyboard with a
+     * single gesture set wants. */
+    if (mask == 0) {
+        return true;
+    }
+
+    for (uint8_t layer = 0; mask != 0; layer++, mask >>= 1) {
+        if ((mask & 1) && zmk_keymap_layer_active(layer)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+uint8_t zmk_mouse_gesture_count(void) { return ARRAY_SIZE(mouse_gesture_instances); }
+
+const char *zmk_mouse_gesture_name(uint8_t index) {
+    if (index >= ARRAY_SIZE(mouse_gesture_instances)) {
+        return NULL;
+    }
+
+    const struct input_processor_mouse_gesture_config *config =
+        mouse_gesture_instances[index]->config;
+    return config->display_name;
+}
+
+uint32_t zmk_mouse_gesture_get_active_layers(uint8_t index) {
+    if (index >= ARRAY_SIZE(mouse_gesture_instances)) {
+        return 0;
+    }
+
+    return effective_active_layers(mouse_gesture_instances[index]);
+}
+
+static int save_active_layers(uint8_t index) {
+    char key[32];
+    snprintf(key, sizeof(key), ACTIVE_LAYERS_SETTINGS_PREFIX "/%u", index);
+
+    struct input_processor_mouse_gesture_data *data = mouse_gesture_instances[index]->data;
+    return settings_save_one(key, &data->active_layers, sizeof(data->active_layers));
+}
+
+int zmk_mouse_gesture_set_active_layers(uint8_t index, uint32_t mask, bool persist) {
+    if (index >= ARRAY_SIZE(mouse_gesture_instances)) {
+        return -EINVAL;
+    }
+
+    struct input_processor_mouse_gesture_data *data = mouse_gesture_instances[index]->data;
+    data->active_layers = mask;
+    data->active_layers_set = true;
+
+    LOG_DBG("Mouse gesture %u active layers set to 0x%08x", index, mask);
+
+    return persist ? save_active_layers(index) : 0;
+}
+
+static int active_layers_settings_set(const char *name, size_t len, settings_read_cb read_cb,
+                                      void *cb_arg) {
+    const char *next;
+    if (!settings_name_steq(name, "", &next) || !next) {
+        return 0;
+    }
+
+    unsigned long index = strtoul(next, NULL, 10);
+    if (index >= ARRAY_SIZE(mouse_gesture_instances)) {
+        LOG_WRN("Ignoring stored active layers for unknown gesture %lu", index);
+        return 0;
+    }
+
+    struct input_processor_mouse_gesture_data *data = mouse_gesture_instances[index]->data;
+    if (len != sizeof(data->active_layers)) {
+        LOG_ERR("Stored active layers for gesture %lu is %d bytes", index, (int)len);
+        return -EINVAL;
+    }
+
+    int rc = read_cb(cb_arg, &data->active_layers, len);
+    if (rc < 0) {
+        return rc;
+    }
+
+    data->active_layers_set = true;
+    return 0;
+}
+
+SETTINGS_STATIC_HANDLER_DEFINE(zmk_mouse_gesture_layers, ACTIVE_LAYERS_SETTINGS_PREFIX, NULL,
+                               active_layers_settings_set, NULL, NULL);
+
 static int input_processor_mouse_gesture_handle_event(const struct device *dev,
                                                       struct input_event *event,
                                                       uint32_t param1, uint32_t param2,
@@ -507,6 +620,12 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
     const struct input_processor_mouse_gesture_config *config = dev->config;
     if (!(event->type == INPUT_EV_REL &&
           (event->code == config->event_code_x || event->code == config->event_code_y))) {
+        return ZMK_INPUT_PROC_CONTINUE;
+    }
+
+    /* Sitting in the listener's base chain, every instance sees every event;
+     * active-layers is what decides which one of them is meant to act. */
+    if (!layers_allow(dev)) {
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
@@ -596,14 +715,9 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
         return ZMK_EV_EVENT_BUBBLE;
     }
 
-#define MOUSE_GESTURE_DEV_ITEM(n) DEVICE_DT_INST_GET(n),
-    static const struct device *const mouse_gesture_devs[] = {
-        DT_INST_FOREACH_STATUS_OKAY(MOUSE_GESTURE_DEV_ITEM)
-    };
-
-    for (size_t i = 0; i < ARRAY_SIZE(mouse_gesture_devs); i++) {
+    for (size_t i = 0; i < ARRAY_SIZE(mouse_gesture_instances); i++) {
         struct state_action_msg msg = {
-            .dev = mouse_gesture_devs[i],
+            .dev = mouse_gesture_instances[i],
             .activate = ev->is_active,
         };
         if (k_msgq_put(&state_action_msgq, &msg, K_MSEC(10)) != 0) {
@@ -659,6 +773,9 @@ static const struct zmk_input_processor_driver_api input_processor_mouse_gesture
         .suppress_movement = DT_INST_PROP_OR(n, suppress_movement, false),                            \
         .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 150),                                  \
         .partial_gesture_timeout_ms = DT_INST_PROP_OR(n, partial_gesture_timeout_ms, 400),            \
+        .active_layers = DT_INST_PROP_OR(n, active_layers, 0),                                        \
+        .display_name = DT_INST_PROP_OR(n, display_name, DT_INST_NODE_FULL_NAME(n)),                  \
+        .index = n,                                                                                   \
         .event_code_x = (uint16_t)DT_INST_PROP_OR(n, event_code_x, INPUT_REL_X),                          \
         .event_code_y = (uint16_t)DT_INST_PROP_OR(n, event_code_y, INPUT_REL_Y),                          \
         .patterns = gesture_patterns_##n,                                                             \
