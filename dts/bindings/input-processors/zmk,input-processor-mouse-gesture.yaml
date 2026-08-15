@@ -46,6 +46,11 @@ properties:
     default: 150
     description: "Time in milliseconds to wait for idle before invoking gesture. When set to 0, idle timeout is disabled."
 
+  partial-gesture-timeout-ms:
+    type: int
+    default: 400
+    description: "Discard a partially accumulated gesture after this many milliseconds without movement. Movement that never reaches `stroke-size` is otherwise kept indefinitely and later combines with unrelated movement, resolving to the wrong direction. Set to 0 to disable. Must be comfortably longer than the pause between strokes of a multi-stroke gesture."
+
   suppress-movement:
     type: boolean
     description: "Suppress cursor movement events while gesture recognition is active. When enabled, X/Y events configured by `event-code-x` and `event-code-y` are consumed by this processor and not propagated downstream while gesture recognition is active."
