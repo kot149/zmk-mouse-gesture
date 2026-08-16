@@ -519,7 +519,13 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
     if (config->suppress_movement) {
         struct input_processor_mouse_gesture_data *data = dev->data;
         if (data->is_active) {
-            return ZMK_INPUT_PROC_STOP;
+            /* Zero the movement instead of returning ZMK_INPUT_PROC_STOP.
+             * On zmk's layer-override path, input_listener discards a STOP
+             * returned by the override chain (it returns 0 when process-next
+             * is unset), so the event reached HID untouched and the pointer
+             * kept moving. Writing 0 suppresses movement from anywhere in
+             * the chain. */
+            event->value = 0;
         }
     }
 
