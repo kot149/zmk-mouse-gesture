@@ -118,6 +118,8 @@ Define the gesture patterns in `&zip_mouse_gesture` and add it to the input proc
 - `event-code-y` (default: `INPUT_REL_Y`): Input event code treated as the relative Y axis.
 - `gesture-cooldown-ms` (default: 500): Time in milliseconds to stop processing for next gesture after the execution of a gesture. This is useful to prevent unexpected double gestures.
 
+Neither the number of patterns nor their length is capped: each processor sizes its gesture trie from its own devicetree children, so an instance costs only what its patterns actually need.
+
 ### 5. Perform the gesture
 
 Activate gesture by pressing the activation key and perform the gesture.
