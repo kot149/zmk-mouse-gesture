@@ -158,6 +158,7 @@ struct input_processor_mouse_gesture_config {
     bool always_active;
     bool suppress_movement;  // Consume X/Y events while gesture is active
     uint32_t idle_timeout_ms;  // Time to wait for idle before invoking gesture
+    uint32_t partial_gesture_timeout_ms; // Discard a stale in-progress gesture after this much idle time
     uint16_t event_code_x;
     uint16_t event_code_y;
     const struct gesture_pattern *patterns;  // Array of pointers to patterns
@@ -413,6 +414,14 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
+    // Discard a stale, partially accumulated gesture.
+    if (config->partial_gesture_timeout_ms > 0 && data->last_movement_time > 0 &&
+        (current_time - data->last_movement_time) > (int64_t)config->partial_gesture_timeout_ms) {
+        LOG_DBG("Idle for %lldms, discarding stale gesture data",
+                current_time - data->last_movement_time);
+        clear_gesture_data_locked(data);
+    }
+
     // Accumulate with overflow protection
     if (event->code == config->event_code_x) {
         accumulate_movement_safe(&data->acc_x, event->value, "X");
@@ -649,6 +658,7 @@ static const struct zmk_input_processor_driver_api input_processor_mouse_gesture
         .always_active = DT_INST_PROP_OR(n, always_active, false),                                    \
         .suppress_movement = DT_INST_PROP_OR(n, suppress_movement, false),                            \
         .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 150),                                  \
+        .partial_gesture_timeout_ms = DT_INST_PROP_OR(n, partial_gesture_timeout_ms, 400),            \
         .event_code_x = (uint16_t)DT_INST_PROP_OR(n, event_code_x, INPUT_REL_X),                          \
         .event_code_y = (uint16_t)DT_INST_PROP_OR(n, event_code_y, INPUT_REL_Y),                          \
         .patterns = gesture_patterns_##n,                                                             \
