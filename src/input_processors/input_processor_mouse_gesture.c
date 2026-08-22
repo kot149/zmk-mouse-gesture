@@ -580,11 +580,17 @@ int zmk_mouse_gesture_set_active_layers(uint8_t index, uint32_t mask, bool persi
 static int active_layers_settings_set(const char *name, size_t len, settings_read_cb read_cb,
                                       void *cb_arg) {
     const char *next;
-    if (!settings_name_steq(name, "", &next) || !next) {
+    int name_len = settings_name_next(name, &next);
+    if (name_len <= 0 || next != NULL) {
         return 0;
     }
 
-    unsigned long index = strtoul(next, NULL, 10);
+    char *end;
+    unsigned long index = strtoul(name, &end, 10);
+    if (end != name + name_len) {
+        return 0;
+    }
+
     if (index >= ARRAY_SIZE(mouse_gesture_instances)) {
         LOG_WRN("Ignoring stored active layers for unknown gesture %lu", index);
         return 0;
