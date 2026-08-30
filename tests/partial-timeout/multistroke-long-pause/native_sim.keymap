@@ -10,10 +10,10 @@
 
     mock_mouse: mock_mouse {
         compatible = "zmk,input-mock";
-        event-startup-delay = <10>;
-        event-period = <500>;
+        event-startup-delay = <500>;
+        event-period = <1000>;
         events = <
-            INPUT_EV_REL INPUT_REL_X 100 0
+            INPUT_EV_REL INPUT_REL_X 100 1
             INPUT_EV_REL INPUT_REL_Y 100 1
         >;
     };

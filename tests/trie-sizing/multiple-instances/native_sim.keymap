@@ -13,14 +13,14 @@
         event-startup-delay = <10>;
         event-period = <100>;
         events = <
-            INPUT_EV_REL INPUT_REL_X 50 0
+            INPUT_EV_REL INPUT_REL_X 50 1
             INPUT_EV_REL INPUT_REL_X 50 1
         >;
     };
 
     mock_mouse_b: mock_mouse_b {
         compatible = "zmk,input-mock";
-        event-startup-delay = <20>;
+        event-startup-delay = <300>;
         event-period = <10>;
         events = <
             INPUT_EV_REL INPUT_REL_Y 100 1

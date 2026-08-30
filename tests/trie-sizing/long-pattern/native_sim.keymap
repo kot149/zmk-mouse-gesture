@@ -9,8 +9,8 @@
 #define MG_PATTERN_128 MG_PATTERN_64 MG_PATTERN_64
 
 #define MG_EVENT_PAIR \
-    INPUT_EV_REL INPUT_REL_Y 100 0 \
-    INPUT_EV_REL INPUT_REL_X 100 0
+    INPUT_EV_REL INPUT_REL_Y 100 1 \
+    INPUT_EV_REL INPUT_REL_X 100 1
 #define MG_EVENTS_2 MG_EVENT_PAIR
 #define MG_EVENTS_4 MG_EVENTS_2 MG_EVENTS_2
 #define MG_EVENTS_8 MG_EVENTS_4 MG_EVENTS_4
@@ -30,11 +30,11 @@
     mock_mouse: mock_mouse {
         compatible = "zmk,input-mock";
         event-startup-delay = <10>;
-        event-period = <5>;
+        event-period = <50>;
         exit-after;
         events = <
             MG_EVENTS_128
-            INPUT_EV_REL INPUT_REL_Y 100 0
+            INPUT_EV_REL INPUT_REL_Y 100 1
             INPUT_EV_REL INPUT_REL_X 100 1
         >;
     };

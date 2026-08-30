@@ -1,0 +1,115 @@
+name: Tests
+
+on:
+  push:
+    paths:
+      - ".github/workflows/test.yml"
+      - "src/**"
+      - "dts/**"
+      - "tests/**"
+      - "CMakeLists.txt"
+      - "Kconfig"
+      - "zephyr/module.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/test.yml"
+      - "src/**"
+      - "dts/**"
+      - "tests/**"
+      - "CMakeLists.txt"
+      - "Kconfig"
+      - "zephyr/module.yml"
+
+env:
+  ZMK_REF: 641514a97db345f499dd50b0360e594270f008fe
+
+jobs:
+  collect-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.find.outputs.tests }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Find tests
+        id: find
+        run: |
+          TESTS=$(find tests -name native_sim.keymap -exec dirname {} \; \
+            | sort \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "tests=${TESTS}" >> "$GITHUB_OUTPUT"
+
+  run-tests:
+    needs: collect-tests
+    if: ${{ needs.collect-tests.outputs.tests != '[]' }}
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/zmkfirmware/zmk-build-arm:4.1
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJSON(needs.collect-tests.outputs.tests) }}
+    steps:
+      - name: Checkout module
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          path: module
+
+      - name: Checkout ZMK
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: zmkfirmware/zmk
+          ref: ${{ env.ZMK_REF }}
+          path: zmk
+
+      - name: Cache west modules
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            zmk/modules/
+            zmk/tools/
+            zmk/zephyr/
+            zmk/bootloader/
+          key: ${{ runner.os }}-west-${{ env.ZMK_REF }}
+          restore-keys: |
+            ${{ runner.os }}-west-
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Initialize west workspace
+        working-directory: zmk
+        run: |
+          west init -l app
+          west update --fetch-opt=--filter=tree:0
+          west zephyr-export
+
+      - name: Run test
+        working-directory: zmk/app
+        env:
+          ZMK_EXTRA_MODULES: ${{ github.workspace }}/module
+          TEST_PATH: ${{ matrix.test }}
+        run: |
+          testpath="${ZMK_EXTRA_MODULES}/${TEST_PATH}"
+          testcase=$(basename "$testpath")
+          build_dir="build/tests/${testcase}"
+
+          echo "Running ${testcase}..."
+          west build -s . -d "${build_dir}" -b native_sim//zmk_test_mock -p -- \
+            -DCONFIG_ASSERT=y \
+            -DZMK_CONFIG="${testpath}" \
+            -DZMK_EXTRA_MODULES="${ZMK_EXTRA_MODULES}"
+
+          "${build_dir}/zephyr/zmk.exe" \
+            | sed -e 's/.*> //' \
+            | tee "${build_dir}/keycode_events_full.log" \
+            | sed -n -f "${testpath}/events.patterns" \
+            > "${build_dir}/keycode_events.log"
+
+          diff -auZ "${testpath}/keycode_events.snapshot" "${build_dir}/keycode_events.log"
+
+      - name: Archive logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: "${{ strategy.job-index }}-log"
+          path: zmk/app/build/**/*.log

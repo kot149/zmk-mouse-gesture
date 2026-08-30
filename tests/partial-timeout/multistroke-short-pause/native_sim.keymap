@@ -13,7 +13,7 @@
         event-startup-delay = <10>;
         event-period = <300>;
         events = <
-            INPUT_EV_REL INPUT_REL_X 100 0
+            INPUT_EV_REL INPUT_REL_X 100 1
             INPUT_EV_REL INPUT_REL_Y 100 1
         >;
     };
