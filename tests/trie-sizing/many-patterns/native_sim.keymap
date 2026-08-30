@@ -1,0 +1,129 @@
+#include "../../behavior_keymap.dtsi"
+
+/ {
+    keymap {
+        compatible = "zmk,keymap";
+        default_layer {
+            bindings = <&none>;
+        };
+    };
+
+    mock_mouse: mock_mouse {
+        compatible = "zmk,input-mock";
+        event-startup-delay = <10>;
+        event-period = <10>;
+        exit-after;
+        events = <
+            INPUT_EV_REL INPUT_REL_X 100 0
+            INPUT_EV_REL INPUT_REL_Y (-100) 0
+            INPUT_EV_REL INPUT_REL_X (-100) 0
+            INPUT_EV_REL INPUT_REL_Y 100 0
+            INPUT_EV_REL INPUT_REL_X 100 0
+            INPUT_EV_REL INPUT_REL_Y (-100) 0
+            INPUT_EV_REL INPUT_REL_X (-100) 0
+            INPUT_EV_REL INPUT_REL_Y 100 1
+        >;
+    };
+
+    mouse_listener: mouse_listener {
+        compatible = "zmk,input-listener";
+        device = <&mock_mouse>;
+        input-processors = <&zip_mouse_gesture>;
+    };
+};
+
+&kscan {
+    events = <ZMK_MOCK_PRESS(0,0,0)>;
+    /delete-property/ exit-after;
+};
+
+&zip_mouse_gesture {
+    stroke-size = <100>;
+    movement-threshold = <0>;
+    gesture-cooldown-ms = <0>;
+    idle-timeout-ms = <0>;
+    partial-gesture-timeout-ms = <0>;
+    enable-eager-mode;
+    always-active;
+
+    pattern_01 {
+        pattern = <GESTURE_LEFT GESTURE_DOWN GESTURE_UP GESTURE_RIGHT GESTURE_LEFT GESTURE_DOWN GESTURE_UP GESTURE_RIGHT>;
+        bindings = <&kp A>;
+    };
+    pattern_02 {
+        pattern = <GESTURE_LEFT GESTURE_DOWN GESTURE_RIGHT GESTURE_UP GESTURE_LEFT GESTURE_DOWN GESTURE_UP GESTURE_RIGHT>;
+        bindings = <&kp B>;
+    };
+    pattern_03 {
+        pattern = <GESTURE_LEFT GESTURE_UP GESTURE_DOWN GESTURE_RIGHT GESTURE_LEFT GESTURE_DOWN GESTURE_UP GESTURE_RIGHT>;
+        bindings = <&kp C>;
+    };
+    pattern_04 {
+        pattern = <GESTURE_LEFT GESTURE_UP GESTURE_RIGHT GESTURE_DOWN GESTURE_LEFT GESTURE_UP GESTURE_DOWN GESTURE_RIGHT>;
+        bindings = <&kp D>;
+    };
+    pattern_05 {
+        pattern = <GESTURE_LEFT GESTURE_RIGHT GESTURE_DOWN GESTURE_UP GESTURE_LEFT GESTURE_DOWN GESTURE_UP GESTURE_RIGHT>;
+        bindings = <&kp E>;
+    };
+    pattern_06 {
+        pattern = <GESTURE_LEFT GESTURE_RIGHT GESTURE_UP GESTURE_DOWN GESTURE_LEFT GESTURE_UP GESTURE_DOWN GESTURE_RIGHT>;
+        bindings = <&kp F>;
+    };
+    pattern_07 {
+        pattern = <GESTURE_DOWN GESTURE_LEFT GESTURE_UP GESTURE_RIGHT GESTURE_DOWN GESTURE_LEFT GESTURE_UP GESTURE_RIGHT>;
+        bindings = <&kp G>;
+    };
+    pattern_08 {
+        pattern = <GESTURE_DOWN GESTURE_LEFT GESTURE_RIGHT GESTURE_UP GESTURE_DOWN GESTURE_LEFT GESTURE_UP GESTURE_RIGHT>;
+        bindings = <&kp H>;
+    };
+    pattern_09 {
+        pattern = <GESTURE_DOWN GESTURE_UP GESTURE_LEFT GESTURE_RIGHT GESTURE_DOWN GESTURE_UP GESTURE_LEFT GESTURE_RIGHT>;
+        bindings = <&kp I>;
+    };
+    pattern_10 {
+        pattern = <GESTURE_DOWN GESTURE_UP GESTURE_RIGHT GESTURE_LEFT GESTURE_DOWN GESTURE_UP GESTURE_RIGHT GESTURE_LEFT>;
+        bindings = <&kp J>;
+    };
+    pattern_11 {
+        pattern = <GESTURE_DOWN GESTURE_RIGHT GESTURE_LEFT GESTURE_UP GESTURE_DOWN GESTURE_RIGHT GESTURE_LEFT GESTURE_UP>;
+        bindings = <&kp K>;
+    };
+    pattern_12 {
+        pattern = <GESTURE_DOWN GESTURE_RIGHT GESTURE_UP GESTURE_LEFT GESTURE_DOWN GESTURE_RIGHT GESTURE_UP GESTURE_LEFT>;
+        bindings = <&kp L>;
+    };
+    pattern_13 {
+        pattern = <GESTURE_UP GESTURE_LEFT GESTURE_DOWN GESTURE_RIGHT GESTURE_UP GESTURE_LEFT GESTURE_DOWN GESTURE_RIGHT>;
+        bindings = <&kp M>;
+    };
+    pattern_14 {
+        pattern = <GESTURE_UP GESTURE_LEFT GESTURE_RIGHT GESTURE_DOWN GESTURE_UP GESTURE_LEFT GESTURE_RIGHT GESTURE_DOWN>;
+        bindings = <&kp N>;
+    };
+    pattern_15 {
+        pattern = <GESTURE_UP GESTURE_DOWN GESTURE_LEFT GESTURE_RIGHT GESTURE_UP GESTURE_DOWN GESTURE_LEFT GESTURE_RIGHT>;
+        bindings = <&kp O>;
+    };
+    pattern_16 {
+        pattern = <GESTURE_UP GESTURE_DOWN GESTURE_RIGHT GESTURE_LEFT GESTURE_UP GESTURE_DOWN GESTURE_RIGHT GESTURE_LEFT>;
+        bindings = <&kp P>;
+    };
+    pattern_17 {
+        pattern = <GESTURE_UP GESTURE_RIGHT GESTURE_LEFT GESTURE_DOWN GESTURE_UP GESTURE_RIGHT GESTURE_LEFT GESTURE_DOWN>;
+        bindings = <&kp Q>;
+    };
+    pattern_18 {
+        pattern = <GESTURE_UP GESTURE_RIGHT GESTURE_DOWN GESTURE_LEFT GESTURE_UP GESTURE_RIGHT GESTURE_DOWN GESTURE_LEFT>;
+        bindings = <&kp R>;
+    };
+    pattern_19 {
+        pattern = <GESTURE_RIGHT GESTURE_LEFT GESTURE_DOWN GESTURE_UP GESTURE_RIGHT GESTURE_LEFT GESTURE_DOWN GESTURE_UP>;
+        bindings = <&kp S>;
+    };
+    pattern_20 {
+        pattern = <GESTURE_RIGHT GESTURE_UP GESTURE_LEFT GESTURE_DOWN GESTURE_RIGHT GESTURE_UP GESTURE_LEFT GESTURE_DOWN>;
+        bindings = <&kp T>;
+    };
+};

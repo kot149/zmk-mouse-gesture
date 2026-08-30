@@ -1,0 +1,68 @@
+#include "../../behavior_keymap.dtsi"
+
+#define MG_PATTERN_2 GESTURE_DOWN GESTURE_RIGHT
+#define MG_PATTERN_4 MG_PATTERN_2 MG_PATTERN_2
+#define MG_PATTERN_8 MG_PATTERN_4 MG_PATTERN_4
+#define MG_PATTERN_16 MG_PATTERN_8 MG_PATTERN_8
+#define MG_PATTERN_32 MG_PATTERN_16 MG_PATTERN_16
+#define MG_PATTERN_64 MG_PATTERN_32 MG_PATTERN_32
+#define MG_PATTERN_128 MG_PATTERN_64 MG_PATTERN_64
+
+#define MG_EVENT_PAIR \
+    INPUT_EV_REL INPUT_REL_Y 100 0 \
+    INPUT_EV_REL INPUT_REL_X 100 0
+#define MG_EVENTS_2 MG_EVENT_PAIR
+#define MG_EVENTS_4 MG_EVENTS_2 MG_EVENTS_2
+#define MG_EVENTS_8 MG_EVENTS_4 MG_EVENTS_4
+#define MG_EVENTS_16 MG_EVENTS_8 MG_EVENTS_8
+#define MG_EVENTS_32 MG_EVENTS_16 MG_EVENTS_16
+#define MG_EVENTS_64 MG_EVENTS_32 MG_EVENTS_32
+#define MG_EVENTS_128 MG_EVENTS_64 MG_EVENTS_64
+
+/ {
+    keymap {
+        compatible = "zmk,keymap";
+        default_layer {
+            bindings = <&none>;
+        };
+    };
+
+    mock_mouse: mock_mouse {
+        compatible = "zmk,input-mock";
+        event-startup-delay = <10>;
+        event-period = <5>;
+        exit-after;
+        events = <
+            MG_EVENTS_128
+            INPUT_EV_REL INPUT_REL_Y 100 0
+            INPUT_EV_REL INPUT_REL_X 100 1
+        >;
+    };
+
+    mouse_listener: mouse_listener {
+        compatible = "zmk,input-listener";
+        device = <&mock_mouse>;
+        input-processors = <&zip_mouse_gesture>;
+    };
+};
+
+&kscan {
+    events = <ZMK_MOCK_PRESS(0,0,0)>;
+    /delete-property/ exit-after;
+};
+
+&zip_mouse_gesture {
+    stroke-size = <100>;
+    movement-threshold = <0>;
+    gesture-cooldown-ms = <0>;
+    idle-timeout-ms = <0>;
+    partial-gesture-timeout-ms = <0>;
+    enable-eager-mode;
+    always-active;
+
+    long_path {
+        pattern = <MG_PATTERN_128 GESTURE_DOWN GESTURE_RIGHT>;
+        bindings = <&kp A>;
+        tap-ms = <1>;
+    };
+};

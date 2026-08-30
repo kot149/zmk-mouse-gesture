@@ -1,0 +1,82 @@
+#include "../../behavior_keymap.dtsi"
+
+/ {
+    keymap {
+        compatible = "zmk,keymap";
+        default_layer {
+            bindings = <&none>;
+        };
+    };
+
+    mock_mouse_a: mock_mouse_a {
+        compatible = "zmk,input-mock";
+        event-startup-delay = <10>;
+        event-period = <100>;
+        events = <
+            INPUT_EV_REL INPUT_REL_X 50 0
+            INPUT_EV_REL INPUT_REL_X 50 1
+        >;
+    };
+
+    mock_mouse_b: mock_mouse_b {
+        compatible = "zmk,input-mock";
+        event-startup-delay = <20>;
+        event-period = <10>;
+        events = <
+            INPUT_EV_REL INPUT_REL_Y 100 1
+        >;
+    };
+
+    mouse_listener_a: mouse_listener_a {
+        compatible = "zmk,input-listener";
+        device = <&mock_mouse_a>;
+        input-processors = <&gesture_a>;
+    };
+
+    mouse_listener_b: mouse_listener_b {
+        compatible = "zmk,input-listener";
+        device = <&mock_mouse_b>;
+        input-processors = <&gesture_b>;
+    };
+
+    gesture_a: gesture_a {
+        compatible = "zmk,input-processor-mouse-gesture";
+        #input-processor-cells = <0>;
+        stroke-size = <100>;
+        movement-threshold = <0>;
+        gesture-cooldown-ms = <0>;
+        idle-timeout-ms = <0>;
+        partial-gesture-timeout-ms = <0>;
+        enable-eager-mode;
+        always-active;
+
+        right {
+            pattern = <GESTURE_RIGHT>;
+            bindings = <&kp A>;
+        };
+    };
+
+    gesture_b: gesture_b {
+        compatible = "zmk,input-processor-mouse-gesture";
+        #input-processor-cells = <0>;
+        stroke-size = <100>;
+        movement-threshold = <0>;
+        gesture-cooldown-ms = <0>;
+        idle-timeout-ms = <0>;
+        partial-gesture-timeout-ms = <0>;
+        enable-eager-mode;
+        always-active;
+
+        down {
+            pattern = <GESTURE_DOWN>;
+            bindings = <&kp B>;
+        };
+    };
+};
+
+&kscan {
+    events = <
+        ZMK_MOCK_PRESS(0,0,1000)
+        ZMK_MOCK_RELEASE(0,0,10)
+    >;
+};
