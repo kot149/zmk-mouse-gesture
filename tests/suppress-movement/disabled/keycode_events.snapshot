@@ -1,0 +1,5 @@
+pressed: usage_page 0x07 keycode 0x04 implicit_mods 0x00 explicit_mods 0x00
+released: usage_page 0x07 keycode 0x04 implicit_mods 0x00 explicit_mods 0x00
+movement_set: Mouse movement set to 100/0
+scroll_set: Mouse scroll set to 0/0
+movement_set: Mouse movement set to 0/0

@@ -1,0 +1,46 @@
+#include "../../behavior_keymap.dtsi"
+
+/ {
+    keymap {
+        compatible = "zmk,keymap";
+        default_layer {
+            bindings = <&none>;
+        };
+    };
+
+    mock_mouse: mock_mouse {
+        compatible = "zmk,input-mock";
+        event-period = <10>;
+        events = <
+            INPUT_EV_REL INPUT_REL_WHEEL 3 1
+        >;
+    };
+
+    mouse_listener: mouse_listener {
+        compatible = "zmk,input-listener";
+        device = <&mock_mouse>;
+        input-processors = <&zip_mouse_gesture>;
+    };
+};
+
+&kscan {
+    events = <
+        ZMK_MOCK_PRESS(0,0,10)
+        ZMK_MOCK_RELEASE(0,0,500)
+    >;
+};
+
+&zip_mouse_gesture {
+    stroke-size = <100>;
+    movement-threshold = <0>;
+    gesture-cooldown-ms = <0>;
+    idle-timeout-ms = <0>;
+    enable-eager-mode;
+    always-active;
+    suppress-movement;
+
+    right {
+        pattern = <GESTURE_RIGHT>;
+        bindings = <&kp A>;
+    };
+};
