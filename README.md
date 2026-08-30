@@ -132,6 +132,15 @@ Or, if you set `always-active`, simply perform the gesture without pressing the 
 
 - **Layer-specific gestures**: define [layer-spesific input processors](https://zmk.dev/docs/keymaps/input-processors/usage#layer-specific-overrides) to trigger different gestures on different layers, or combine with `always-active` to automatically start gesture recognition on specific layers
 
+## Tests
+
+The native simulator tests use `zmk,input-mock` to cover movement suppression, dynamic trie sizing, and partial gesture timeouts. Run them from the ZMK app directory:
+
+```bash
+cd path/to/zmk/app
+ZMK_EXTRA_MODULES=path/to/zmk-mouse-gesture ./run-test.sh path/to/zmk-mouse-gesture/tests
+```
+
 ## Related Works
 
 ### zmk-input-processor-keybind (by [te9no](https://github.com/te9no/zmk-input-processor-keybind) and [zettaface](https://github.com/zettaface/zmk-input-processor-keybind))
