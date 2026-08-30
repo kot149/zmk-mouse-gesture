@@ -134,7 +134,7 @@ Or, if you set `always-active`, simply perform the gesture without pressing the 
 
 ## Tests
 
-The native simulator tests use `zmk,input-mock` to cover movement suppression, dynamic trie sizing, and partial gesture timeouts. Run them from the ZMK app directory:
+The native simulator tests use `zmk,input-mock` to cover activation modes, eager and non-eager recognition, eager prefix resolution, cooldown, duplicate directions, movement suppression, dynamic trie sizing, and partial gesture timeouts. Run them from the ZMK app directory:
 
 ```bash
 cd path/to/zmk/app
