@@ -119,7 +119,7 @@ Define the gesture patterns in `&zip_mouse_gesture` and add it to the input proc
 - `partial-gesture-timeout-ms` (default: 400): Discard a partially accumulated gesture after this many milliseconds without movement. Movement that never reaches `stroke-size` is otherwise kept indefinitely and later combines with unrelated movement, resolving to the wrong direction. Set to 0 to disable. Keep it comfortably longer than the pause between strokes of a multi-stroke gesture.
 - `gesture-cooldown-ms` (default: 500): Time in milliseconds to stop processing for next gesture after the execution of a gesture. This is useful to prevent unexpected double gestures.
 
-Neither the number of patterns nor their length is capped: each processor sizes its gesture trie from its own devicetree children, so an instance costs only what its patterns actually need.
+Neither the number of patterns, their length, nor the number of bindings per pattern is capped. Each processor sizes its gesture trie from its own devicetree children.
 
 ### 5. Perform the gesture
 

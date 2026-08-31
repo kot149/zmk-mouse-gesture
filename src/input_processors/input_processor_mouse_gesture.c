@@ -29,8 +29,6 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
-#define MAX_DEFERRED_BINDINGS 8
-
 struct gesture_node {
     struct gesture_node *child[4];
     const struct gesture_pattern *pattern;
@@ -71,15 +69,13 @@ static int direction_to_index(uint8_t direction) {
     }
 }
 
+struct gesture_pattern;
+
 static void build_gesture_trie(const struct device *dev, const struct gesture_pattern *patterns, size_t pattern_count);
 
 /* Message queue definitions for gesture execution */
 struct gesture_exec_msg {
-    const struct device *dev;
-    size_t binding_count;
-    struct zmk_behavior_binding bindings[MAX_DEFERRED_BINDINGS];
-    uint32_t wait_ms;
-    uint32_t tap_ms;
+    const struct gesture_pattern *pattern;
 };
 
 K_MSGQ_DEFINE(gesture_exec_msgq, sizeof(struct gesture_exec_msg), CONFIG_ZMK_MOUSE_GESTURE_EXEC_MAX_EVENTS, 4);
@@ -178,7 +174,7 @@ static struct gesture_node *allocate_gesture_node(const struct device *dev) {
     return node;
 }
 
-static void schedule_gesture_execution(const struct device *dev, const struct gesture_pattern *pattern);
+static void schedule_gesture_execution(const struct gesture_pattern *pattern);
 static void clear_gesture_data_locked(struct input_processor_mouse_gesture_data *data);
 
 static uint8_t detect_direction(int32_t x, int32_t y) {
@@ -240,7 +236,7 @@ static const struct gesture_pattern *match_gesture_pattern_locked(const struct d
 
     const struct gesture_pattern *pattern = node->pattern;
     data->last_gesture_time = current_time;
-    schedule_gesture_execution(dev, pattern);
+    schedule_gesture_execution(pattern);
     clear_gesture_data_locked(data);
 
     return pattern;
@@ -315,6 +311,7 @@ static void gesture_exec_work_cb(struct k_work *work) {
     /* -------- 2. Gesture execution -------- */
     struct gesture_exec_msg g_msg;
     while (k_msgq_get(&gesture_exec_msgq, &g_msg, K_NO_WAIT) == 0) {
+        const struct gesture_pattern *pattern = g_msg.pattern;
         struct zmk_behavior_binding_event event = {
             .position = INT32_MAX,
             .timestamp = k_uptime_get(),
@@ -322,13 +319,15 @@ static void gesture_exec_work_cb(struct k_work *work) {
             .source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL,
 #endif
         };
-        for (size_t k = 0; k < g_msg.binding_count; k++) {
-            int ret = zmk_behavior_queue_add(&event, g_msg.bindings[k], true, k * g_msg.wait_ms);
+        for (size_t k = 0; k < pattern->bindings_len; k++) {
+            int ret = zmk_behavior_queue_add(&event, pattern->bindings[k], true,
+                                             k * pattern->wait_ms);
             if (ret < 0) {
                 LOG_ERR("Failed to queue press event %zu: %d", k, ret);
                 continue;
             }
-            ret = zmk_behavior_queue_add(&event, g_msg.bindings[k], false, (k * g_msg.wait_ms) + g_msg.tap_ms);
+            ret = zmk_behavior_queue_add(&event, pattern->bindings[k], false,
+                                         (k * pattern->wait_ms) + pattern->tap_ms);
             if (ret < 0) {
                 LOG_ERR("Failed to queue release event %zu: %d", k, ret);
             }
@@ -343,23 +342,17 @@ static void gesture_exec_work_cb(struct k_work *work) {
 }
 
 // Schedule gesture execution via work queue
-static void schedule_gesture_execution(const struct device *dev, const struct gesture_pattern *pattern) {
+static void schedule_gesture_execution(const struct gesture_pattern *pattern) {
     if (!pattern || pattern->bindings_len == 0) {
         return;
     }
 
-    /* Build execution message */
-    struct gesture_exec_msg msg = {0};
-    msg.dev = dev;
-    msg.binding_count = MIN(pattern->bindings_len, MAX_DEFERRED_BINDINGS);
-    memcpy(msg.bindings, pattern->bindings,
-           msg.binding_count * sizeof(struct zmk_behavior_binding));
-    msg.wait_ms = pattern->wait_ms;
-    msg.tap_ms = pattern->tap_ms;
+    struct gesture_exec_msg msg = {.pattern = pattern};
 
-    int ret = k_msgq_put(&gesture_exec_msgq, &msg, K_MSEC(10));
+    int ret = k_msgq_put(&gesture_exec_msgq, &msg, K_NO_WAIT);
     if (ret < 0) {
-        LOG_WRN("Gesture execution queue full – gesture dropped (len=%zu)", msg.binding_count);
+        LOG_WRN("Gesture execution queue full – gesture dropped (len=%zu)",
+                pattern->bindings_len);
         return;
     }
 
