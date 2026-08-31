@@ -53,7 +53,7 @@ properties:
 
   suppress-movement:
     type: boolean
-    description: "Suppress cursor movement events while gesture recognition is active. When enabled, X/Y events configured by `event-code-x` and `event-code-y` are consumed by this processor and not propagated downstream while gesture recognition is active."
+    description: "Prevent cursor movement while gesture recognition is active by replacing the configured X/Y event values with 0."
 
   gesture-cooldown-ms:
     type: int
