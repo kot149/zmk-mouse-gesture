@@ -19,10 +19,10 @@ config ZMK_MOUSE_GESTURE_EXEC_MAX_EVENTS
 	  warnings about "Gesture execution queue full".
 
 config ZMK_MOUSE_GESTURE_REL_QUEUE_LEN
-	int "Maximum queued mouse relative movement events"
+	int
 	default 32
 	depends on ZMK_MOUSE_GESTURE
 	range 8 128
 	help
-	  Size of the message queue buffering raw relative mouse movements before they
-	  are processed into gesture sequences.
+	  Retained for compatibility with existing configurations. Mouse movement
+	  events are processed directly, so this value has no effect.

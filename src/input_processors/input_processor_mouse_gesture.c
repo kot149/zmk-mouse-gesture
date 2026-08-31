@@ -87,22 +87,6 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
 static void gesture_exec_work_cb(struct k_work *work);
 static K_WORK_DEFINE(gesture_exec_work, gesture_exec_work_cb);
 
-/* State change message queue */
-struct state_action_msg {
-    const struct device *dev;
-    bool activate;
-};
-K_MSGQ_DEFINE(state_action_msgq, sizeof(struct state_action_msg), 8, 4);
-
-/* Mouse relative movement message queue */
-struct mouse_rel_msg {
-    const struct device *dev;
-    uint16_t code;
-    int32_t value;
-};
-
-K_MSGQ_DEFINE(mouse_rel_msgq, sizeof(struct mouse_rel_msg), CONFIG_ZMK_MOUSE_GESTURE_REL_QUEUE_LEN, 4);
-
 struct gesture_pattern {
     size_t bindings_len;
     const struct zmk_behavior_binding *bindings;
@@ -265,50 +249,6 @@ static void idle_timeout_work_handler(struct k_work *work) {
 static void gesture_exec_work_cb(struct k_work *work) {
     ARG_UNUSED(work);
 
-    struct state_action_msg s_msg;
-    while (k_msgq_get(&state_action_msgq, &s_msg, K_NO_WAIT) == 0) {
-        const struct device *dev = s_msg.dev;
-        if (!dev) {
-            continue;
-        }
-        const struct input_processor_mouse_gesture_config *config = dev->config;
-        struct input_processor_mouse_gesture_data *data = dev->data;
-        if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
-            bool old_state = data->is_active;
-            bool new_state = config->always_active ? true : s_msg.activate;
-            data->is_active = new_state;
-            if (old_state && !new_state) { // Deactivated
-                match_gesture_pattern_locked(dev, true);
-            } else if (!old_state && new_state) { // activated
-                clear_gesture_data_locked(data);
-            }
-            k_mutex_unlock(&data->lock);
-        }
-    }
-
-    struct mouse_rel_msg m_msg;
-    while (k_msgq_get(&mouse_rel_msgq, &m_msg, K_NO_WAIT) == 0) {
-        const struct device *dev = m_msg.dev;
-        if (!dev) {
-            continue;
-        }
-        struct input_processor_mouse_gesture_data *data = dev->data;
-        if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
-            struct input_event ev = {
-                .type = INPUT_EV_REL,
-                .code = m_msg.code,
-                .value = m_msg.value,
-            };
-            input_processor_mouse_gesture_handle_event_locked(dev, &ev);
-            // Execute gesture pattern matching if eager mode is enabled
-            if (((const struct input_processor_mouse_gesture_config *)dev->config)->enable_eager_mode) {
-                match_gesture_pattern_locked(dev, false);
-            }
-            k_mutex_unlock(&data->lock);
-        }
-    }
-
-    /* -------- 2. Gesture execution -------- */
     struct gesture_exec_msg g_msg;
     while (k_msgq_get(&gesture_exec_msgq, &g_msg, K_NO_WAIT) == 0) {
         const struct gesture_pattern *pattern = g_msg.pattern;
@@ -334,9 +274,7 @@ static void gesture_exec_work_cb(struct k_work *work) {
         }
     }
 
-    if (k_msgq_num_used_get(&state_action_msgq) > 0 ||
-        k_msgq_num_used_get(&mouse_rel_msgq) > 0 ||
-        k_msgq_num_used_get(&gesture_exec_msgq) > 0) {
+    if (k_msgq_num_used_get(&gesture_exec_msgq) > 0) {
         k_work_submit(&gesture_exec_work);
     }
 }
@@ -395,15 +333,6 @@ static int input_processor_mouse_gesture_handle_event_locked(const struct device
     }
 
     if (current_time - data->last_gesture_time < config->gesture_cooldown_ms) {
-        return ZMK_INPUT_PROC_CONTINUE;
-    }
-
-    // Check if mouse gesture is active
-    if (!data->is_active) {
-        data->acc_x = 0;
-        data->acc_y = 0;
-        data->last_direction = GESTURE_NONE;
-        data->current_node = data->gesture_trie_root;
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
@@ -504,9 +433,23 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
     }
 
     struct input_processor_mouse_gesture_data *data = dev->data;
-    int32_t value = event->value;
 
-    if (config->suppress_movement && data->is_active) {
+    k_mutex_lock(&data->lock, K_FOREVER);
+
+    if (!data->is_active) {
+        k_mutex_unlock(&data->lock);
+        return ZMK_INPUT_PROC_CONTINUE;
+    }
+
+    int32_t value = event->value;
+    if (abs(value) >= config->movement_threshold) {
+        input_processor_mouse_gesture_handle_event_locked(dev, event);
+        if (config->enable_eager_mode) {
+            match_gesture_pattern_locked(dev, false);
+        }
+    }
+
+    if (config->suppress_movement) {
         /* Zero the movement instead of returning ZMK_INPUT_PROC_STOP.
          * On zmk's layer-override path, input_listener discards a STOP
          * returned by the override chain (it returns 0 when process-next
@@ -516,24 +459,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
         event->value = 0;
     }
 
-    /* Ignore small movements */
-    if (abs(value) < config->movement_threshold) {
-        return ZMK_INPUT_PROC_CONTINUE;
-    }
-
-    struct mouse_rel_msg msg = {
-        .dev = dev,
-        .code = event->code,
-        .value = value,
-    };
-
-    if (k_msgq_put(&mouse_rel_msgq, &msg, K_MSEC(10)) != 0) {
-        /* Queue full – drop smallest importance events */
-        LOG_WRN("Mouse rel queue full – movement dropped");
-    }
-
-    k_work_submit(&gesture_exec_work);
-
+    k_mutex_unlock(&data->lock);
     return ZMK_INPUT_PROC_CONTINUE;
 }
 
@@ -595,17 +521,20 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
     };
 
     for (size_t i = 0; i < ARRAY_SIZE(mouse_gesture_devs); i++) {
-        struct state_action_msg msg = {
-            .dev = mouse_gesture_devs[i],
-            .activate = ev->is_active,
-        };
-        if (k_msgq_put(&state_action_msgq, &msg, K_MSEC(10)) != 0) {
-            LOG_WRN("State action queue full – state change dropped");
-        }
-    }
+        const struct device *dev = mouse_gesture_devs[i];
+        const struct input_processor_mouse_gesture_config *config = dev->config;
+        struct input_processor_mouse_gesture_data *data = dev->data;
 
-    /* Ensure work runs */
-    k_work_submit(&gesture_exec_work);
+        k_mutex_lock(&data->lock, K_FOREVER);
+        bool old_state = data->is_active;
+        data->is_active = config->always_active || ev->is_active;
+        if (old_state && !data->is_active) {
+            match_gesture_pattern_locked(dev, true);
+        } else if (!old_state && data->is_active) {
+            clear_gesture_data_locked(data);
+        }
+        k_mutex_unlock(&data->lock);
+    }
 
     return ZMK_EV_EVENT_BUBBLE;
 }
