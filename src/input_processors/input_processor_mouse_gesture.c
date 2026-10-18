@@ -94,15 +94,6 @@ struct state_action_msg {
 };
 K_MSGQ_DEFINE(state_action_msgq, sizeof(struct state_action_msg), 8, 4);
 
-/* Mouse relative movement message queue */
-struct mouse_rel_msg {
-    const struct device *dev;
-    uint16_t code;
-    int32_t value;
-};
-
-K_MSGQ_DEFINE(mouse_rel_msgq, sizeof(struct mouse_rel_msg), CONFIG_ZMK_MOUSE_GESTURE_REL_QUEUE_LEN, 4);
-
 struct gesture_pattern {
     size_t bindings_len;
     const struct zmk_behavior_binding *bindings;
@@ -286,28 +277,6 @@ static void gesture_exec_work_cb(struct k_work *work) {
         }
     }
 
-    struct mouse_rel_msg m_msg;
-    while (k_msgq_get(&mouse_rel_msgq, &m_msg, K_NO_WAIT) == 0) {
-        const struct device *dev = m_msg.dev;
-        if (!dev) {
-            continue;
-        }
-        struct input_processor_mouse_gesture_data *data = dev->data;
-        if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
-            struct input_event ev = {
-                .type = INPUT_EV_REL,
-                .code = m_msg.code,
-                .value = m_msg.value,
-            };
-            input_processor_mouse_gesture_handle_event_locked(dev, &ev);
-            // Execute gesture pattern matching if eager mode is enabled
-            if (((const struct input_processor_mouse_gesture_config *)dev->config)->enable_eager_mode) {
-                match_gesture_pattern_locked(dev, false);
-            }
-            k_mutex_unlock(&data->lock);
-        }
-    }
-
     /* -------- 2. Gesture execution -------- */
     struct gesture_exec_msg g_msg;
     while (k_msgq_get(&gesture_exec_msgq, &g_msg, K_NO_WAIT) == 0) {
@@ -335,7 +304,6 @@ static void gesture_exec_work_cb(struct k_work *work) {
     }
 
     if (k_msgq_num_used_get(&state_action_msgq) > 0 ||
-        k_msgq_num_used_get(&mouse_rel_msgq) > 0 ||
         k_msgq_num_used_get(&gesture_exec_msgq) > 0) {
         k_work_submit(&gesture_exec_work);
     }
@@ -521,18 +489,15 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
-    struct mouse_rel_msg msg = {
-        .dev = dev,
-        .code = event->code,
-        .value = value,
-    };
-
-    if (k_msgq_put(&mouse_rel_msgq, &msg, K_MSEC(10)) != 0) {
-        /* Queue full – drop smallest importance events */
-        LOG_WRN("Mouse rel queue full – movement dropped");
+    struct input_event movement = *event;
+    movement.value = value;
+    if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
+        input_processor_mouse_gesture_handle_event_locked(dev, &movement);
+        if (config->enable_eager_mode) {
+            match_gesture_pattern_locked(dev, false);
+        }
+        k_mutex_unlock(&data->lock);
     }
-
-    k_work_submit(&gesture_exec_work);
 
     return ZMK_INPUT_PROC_CONTINUE;
 }
