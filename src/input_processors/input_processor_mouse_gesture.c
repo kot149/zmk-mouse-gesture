@@ -73,19 +73,12 @@ struct gesture_pattern;
 
 static void build_gesture_trie(const struct device *dev, const struct gesture_pattern *patterns, size_t pattern_count);
 
-/* Message queue definitions for gesture execution */
-struct gesture_exec_msg {
-    const struct gesture_pattern *pattern;
-};
-
-K_MSGQ_DEFINE(gesture_exec_msgq, sizeof(struct gesture_exec_msg), CONFIG_ZMK_MOUSE_GESTURE_EXEC_MAX_EVENTS, 4);
-
 /* Forward declaration for locked event handler */
 static int input_processor_mouse_gesture_handle_event_locked(const struct device *dev,
                                                              struct input_event *event);
 
-static void gesture_exec_work_cb(struct k_work *work);
-static K_WORK_DEFINE(gesture_exec_work, gesture_exec_work_cb);
+static void state_action_work_cb(struct k_work *work);
+static K_WORK_DEFINE(state_action_work, state_action_work_cb);
 
 /* State change message queue */
 struct state_action_msg {
@@ -165,7 +158,7 @@ static struct gesture_node *allocate_gesture_node(const struct device *dev) {
     return node;
 }
 
-static void schedule_gesture_execution(const struct gesture_pattern *pattern);
+static void execute_gesture(const struct gesture_pattern *pattern);
 static void clear_gesture_data_locked(struct input_processor_mouse_gesture_data *data);
 
 static uint8_t detect_direction(int32_t x, int32_t y) {
@@ -227,7 +220,6 @@ static const struct gesture_pattern *match_gesture_pattern_locked(const struct d
 
     const struct gesture_pattern *pattern = node->pattern;
     data->last_gesture_time = current_time;
-    schedule_gesture_execution(pattern);
     clear_gesture_data_locked(data);
 
     return pattern;
@@ -244,16 +236,18 @@ static void idle_timeout_work_handler(struct k_work *work) {
         return;
     }
 
+    const struct gesture_pattern *pattern = NULL;
     if (k_mutex_lock(&data->lock, K_MSEC(50)) == 0) {
         if (data->is_active && data->current_node && data->current_node != data->gesture_trie_root) {
-            match_gesture_pattern_locked(dev, true);
+            pattern = match_gesture_pattern_locked(dev, true);
         }
         k_mutex_unlock(&data->lock);
     }
+    execute_gesture(pattern);
 }
 
 /* Primary work handler processing message queues */
-static void gesture_exec_work_cb(struct k_work *work) {
+static void state_action_work_cb(struct k_work *work) {
     ARG_UNUSED(work);
 
     struct state_action_msg s_msg;
@@ -264,68 +258,51 @@ static void gesture_exec_work_cb(struct k_work *work) {
         }
         const struct input_processor_mouse_gesture_config *config = dev->config;
         struct input_processor_mouse_gesture_data *data = dev->data;
+        const struct gesture_pattern *pattern = NULL;
         if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
             bool old_state = data->is_active;
             bool new_state = config->always_active ? true : s_msg.activate;
             data->is_active = new_state;
             if (old_state && !new_state) { // Deactivated
-                match_gesture_pattern_locked(dev, true);
+                pattern = match_gesture_pattern_locked(dev, true);
             } else if (!old_state && new_state) { // activated
                 clear_gesture_data_locked(data);
             }
             k_mutex_unlock(&data->lock);
         }
+        execute_gesture(pattern);
     }
 
-    /* -------- 2. Gesture execution -------- */
-    struct gesture_exec_msg g_msg;
-    while (k_msgq_get(&gesture_exec_msgq, &g_msg, K_NO_WAIT) == 0) {
-        const struct gesture_pattern *pattern = g_msg.pattern;
-        struct zmk_behavior_binding_event event = {
-            .position = INT32_MAX,
-            .timestamp = k_uptime_get(),
-#if IS_ENABLED(CONFIG_ZMK_SPLIT)
-            .source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL,
-#endif
-        };
-        for (size_t k = 0; k < pattern->bindings_len; k++) {
-            int ret = zmk_behavior_queue_add(&event, pattern->bindings[k], true,
-                                             k * pattern->wait_ms);
-            if (ret < 0) {
-                LOG_ERR("Failed to queue press event %zu: %d", k, ret);
-                continue;
-            }
-            ret = zmk_behavior_queue_add(&event, pattern->bindings[k], false,
-                                         (k * pattern->wait_ms) + pattern->tap_ms);
-            if (ret < 0) {
-                LOG_ERR("Failed to queue release event %zu: %d", k, ret);
-            }
-        }
-    }
-
-    if (k_msgq_num_used_get(&state_action_msgq) > 0 ||
-        k_msgq_num_used_get(&gesture_exec_msgq) > 0) {
-        k_work_submit(&gesture_exec_work);
+    if (k_msgq_num_used_get(&state_action_msgq) > 0) {
+        k_work_submit(&state_action_work);
     }
 }
 
-// Schedule gesture execution via work queue
-static void schedule_gesture_execution(const struct gesture_pattern *pattern) {
+static void execute_gesture(const struct gesture_pattern *pattern) {
     if (!pattern || pattern->bindings_len == 0) {
         return;
     }
 
-    struct gesture_exec_msg msg = {.pattern = pattern};
-
-    int ret = k_msgq_put(&gesture_exec_msgq, &msg, K_NO_WAIT);
-    if (ret < 0) {
-        LOG_WRN("Gesture execution queue full – gesture dropped (len=%zu)",
-                pattern->bindings_len);
-        return;
+    struct zmk_behavior_binding_event event = {
+        .position = INT32_MAX,
+        .timestamp = k_uptime_get(),
+#if IS_ENABLED(CONFIG_ZMK_SPLIT)
+        .source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL,
+#endif
+    };
+    for (size_t k = 0; k < pattern->bindings_len; k++) {
+        int ret = zmk_behavior_queue_add(&event, pattern->bindings[k], true,
+                                         k * pattern->wait_ms);
+        if (ret < 0) {
+            LOG_ERR("Failed to queue press event %zu: %d", k, ret);
+            continue;
+        }
+        ret = zmk_behavior_queue_add(&event, pattern->bindings[k], false,
+                                     (k * pattern->wait_ms) + pattern->tap_ms);
+        if (ret < 0) {
+            LOG_ERR("Failed to queue release event %zu: %d", k, ret);
+        }
     }
-
-    /* Ensure work item runs */
-    k_work_submit(&gesture_exec_work);
 }
 
 // Safe accumulation with overflow protection
@@ -491,13 +468,15 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
 
     struct input_event movement = *event;
     movement.value = value;
+    const struct gesture_pattern *pattern = NULL;
     if (k_mutex_lock(&data->lock, K_FOREVER) == 0) {
         input_processor_mouse_gesture_handle_event_locked(dev, &movement);
         if (config->enable_eager_mode) {
-            match_gesture_pattern_locked(dev, false);
+            pattern = match_gesture_pattern_locked(dev, false);
         }
         k_mutex_unlock(&data->lock);
     }
+    execute_gesture(pattern);
 
     return ZMK_INPUT_PROC_CONTINUE;
 }
@@ -570,7 +549,7 @@ static int mouse_gesture_state_listener(const zmk_event_t *eh) {
     }
 
     /* Ensure work runs */
-    k_work_submit(&gesture_exec_work);
+    k_work_submit(&state_action_work);
 
     return ZMK_EV_EVENT_BUBBLE;
 }
