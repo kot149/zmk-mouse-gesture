@@ -31,13 +31,21 @@ manifest:
 
 ## Usage
 
-### 1. Include `mouse-gesture.dtsi`
+### 1. Check input thread stack size
+
+Mouse gestures run in the input thread and require `CONFIG_INPUT_THREAD_STACK_SIZE` of at least 2048 bytes. The module defaults it to 2048, so you do not need to set it. If it is below 2048 on the central (or a non-split keyboard), the build fails. Remove the setting to use the default, or set it to 2048 or higher in `your-keyboard.conf`:
+
+```ini
+CONFIG_INPUT_THREAD_STACK_SIZE=2048
+```
+
+### 2. Include `mouse-gesture.dtsi`
 
 ```c
 #include <mouse-gesture.dtsi>
 ```
 
-### 2. Add activation key
+### 3. Add activation key
 
 ```dts
 #include <mouse-gesture.dtsi>
@@ -60,7 +68,7 @@ manifest:
 };
 ```
 
-### 3. Configure Input Processor
+### 4. Configure Input Processor
 
 Define the gesture patterns in `&zip_mouse_gesture` and add it to the input processor of your pointing device.
 
