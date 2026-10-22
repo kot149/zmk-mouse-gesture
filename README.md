@@ -29,6 +29,8 @@ manifest:
     path: config
 ```
 
+The module defaults `CONFIG_INPUT_THREAD_STACK_SIZE` to 2048 bytes. If you override it with a smaller value, CMake emits a warning during build configuration because mouse gesture processing may overflow the input thread stack. Set it to 2048 or higher to avoid this warning.
+
 ## Usage
 
 ### 1. Include `mouse-gesture.dtsi`
