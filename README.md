@@ -24,7 +24,7 @@ manifest:
       import: app/west.yml
     - name: zmk-mouse-gesture
       remote: kot149
-      revision: v1
+      revision: v2
   self:
     path: config
 ```
