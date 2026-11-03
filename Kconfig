@@ -9,23 +9,5 @@ config ZMK_MOUSE_GESTURE
 	  Enable mouse gesture support for ZMK.
 	  This allows converting sequences of mouse movements into key presses.
 
-config ZMK_MOUSE_GESTURE_EXEC_MAX_EVENTS
-	int "Deprecated gesture execution queue size (compatibility only)"
-	default 8
-	depends on ZMK_MOUSE_GESTURE
-	range 1 32
-	help
-	  Deprecated and retained only for compatibility with existing configurations.
-	  Setting this option has no effect; bindings use the ZMK behavior queue directly.
-
-config ZMK_MOUSE_GESTURE_REL_QUEUE_LEN
-	int "Deprecated mouse movement queue size (compatibility only)"
-	default 32
-	depends on ZMK_MOUSE_GESTURE
-	range 8 128
-	help
-	  Deprecated and retained only for compatibility with existing configurations.
-	  Setting this option has no effect; movements are processed directly.
-
 config INPUT_THREAD_STACK_SIZE
 	default 2048 if ZMK_MOUSE_GESTURE
