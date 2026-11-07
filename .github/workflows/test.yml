@@ -21,36 +21,54 @@ on:
       - "CMakeLists.txt"
       - "Kconfig"
       - "zephyr/module.yml"
-
-env:
-  ZMK_REF: 641514a97db345f499dd50b0360e594270f008fe
+  schedule:
+    # Weekly check (Mon 09:00 JST) so upstream ZMK changes that break the
+    # module are noticed even when this repository has no new commits.
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
 
 jobs:
   collect-tests:
     runs-on: ubuntu-latest
     outputs:
-      tests: ${{ steps.find.outputs.tests }}
+      matrix: ${{ steps.find.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Find tests
         id: find
         run: |
-          TESTS=$(find tests -name native_sim.keymap -exec dirname {} \; \
-            | sort \
-            | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "tests=${TESTS}" >> "$GITHUB_OUTPUT"
+          # Each leg tests this module against one ZMK line:
+          # - 0.3: the latest v0.3.x release branch (Zephyr 3.5, native_posix_64)
+          # - 0.4-dev: floating main, which will become ZMK v0.4
+          #   (Zephyr 4.1, native_sim). Floating on purpose: if an upstream
+          #   change breaks the module, the scheduled run turns red.
+          LEGS='[
+            {"zmk_name": "0.3", "zmk_ref": "v0.3-branch", "image": "docker.io/zmkfirmware/zmk-build-arm:3.5", "board": "native_posix_64", "keymap": "native_posix_64.keymap"},
+            {"zmk_name": "0.4-dev", "zmk_ref": "main", "image": "docker.io/zmkfirmware/zmk-build-arm:4.1", "board": "native_sim//zmk_test_mock", "keymap": "native_sim.keymap"}
+          ]'
+          MATRIX='[]'
+          while IFS= read -r leg; do
+            keymap=$(jq -r '.keymap' <<< "${leg}")
+            while IFS= read -r testdir; do
+              [ -n "${testdir}" ] || continue
+              MATRIX=$(jq -c --argjson leg "${leg}" --arg test "${testdir}" \
+                '. + [$leg + {test: $test}]' <<< "${MATRIX}")
+            done < <(find tests -name "${keymap}" -exec dirname {} \; | sort)
+          done < <(jq -c '.[]' <<< "${LEGS}")
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
 
   run-tests:
     needs: collect-tests
-    if: ${{ needs.collect-tests.outputs.tests != '[]' }}
+    if: ${{ needs.collect-tests.outputs.matrix != '[]' }}
+    name: "test (zmk ${{ matrix.zmk_name }}, ${{ matrix.test }})"
     runs-on: ubuntu-latest
     container:
-      image: docker.io/zmkfirmware/zmk-build-arm:4.1
+      image: ${{ matrix.image }}
     strategy:
       fail-fast: false
       matrix:
-        test: ${{ fromJSON(needs.collect-tests.outputs.tests) }}
+        include: ${{ fromJSON(needs.collect-tests.outputs.matrix) }}
     steps:
       - name: Checkout module
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -61,7 +79,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: zmkfirmware/zmk
-          ref: ${{ env.ZMK_REF }}
+          ref: ${{ matrix.zmk_ref }}
           path: zmk
 
       - name: Cache west modules
@@ -72,9 +90,9 @@ jobs:
             zmk/tools/
             zmk/zephyr/
             zmk/bootloader/
-          key: ${{ runner.os }}-west-${{ env.ZMK_REF }}
+          key: ${{ runner.os }}-west-${{ matrix.zmk_name }}-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-west-
+            ${{ runner.os }}-west-${{ matrix.zmk_name }}-
         timeout-minutes: 2
         continue-on-error: true
 
@@ -96,7 +114,7 @@ jobs:
           build_dir="build/tests/${testcase}"
 
           echo "Running ${testcase}..."
-          west build -s . -d "${build_dir}" -b native_sim//zmk_test_mock -p -- \
+          west build -s . -d "${build_dir}" -b ${{ matrix.board }} -p -- \
             -DCONFIG_ASSERT=y \
             -DZMK_CONFIG="${testpath}" \
             -DZMK_EXTRA_MODULES="${ZMK_EXTRA_MODULES}"
@@ -113,5 +131,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: "${{ strategy.job-index }}-log"
+          name: "${{ matrix.zmk_name }}-${{ strategy.job-index }}-log"
           path: zmk/app/build/**/*.log
