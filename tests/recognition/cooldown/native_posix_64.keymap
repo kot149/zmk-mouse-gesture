@@ -1,0 +1,75 @@
+#include "../../behavior_keymap.dtsi"
+
+/ {
+    keymap {
+        compatible = "zmk,keymap";
+        default_layer {
+            bindings = <&none>;
+        };
+    };
+
+    mock_first: mock_first {
+        compatible = "zmk,input-mock";
+        event-startup-delay = <600>;
+        event-period = <10>;
+        events = <
+            INPUT_EV_REL INPUT_REL_X 100 1
+        >;
+    };
+
+    mock_second: mock_second {
+        compatible = "zmk,input-mock";
+        event-startup-delay = <700>;
+        event-period = <10>;
+        events = <
+            INPUT_EV_REL INPUT_REL_X 100 1
+        >;
+    };
+
+    mock_third: mock_third {
+        compatible = "zmk,input-mock";
+        event-startup-delay = <1300>;
+        event-period = <10>;
+        events = <
+            INPUT_EV_REL INPUT_REL_X 100 1
+        >;
+    };
+
+    listener_first: listener_first {
+        compatible = "zmk,input-listener";
+        device = <&mock_first>;
+        input-processors = <&zip_mouse_gesture>;
+    };
+
+    listener_second: listener_second {
+        compatible = "zmk,input-listener";
+        device = <&mock_second>;
+        input-processors = <&zip_mouse_gesture>;
+    };
+
+    listener_third: listener_third {
+        compatible = "zmk,input-listener";
+        device = <&mock_third>;
+        input-processors = <&zip_mouse_gesture>;
+    };
+};
+
+&kscan {
+    events = <
+        ZMK_MOCK_PRESS(0,0,2000)
+        ZMK_MOCK_RELEASE(0,0,10)
+    >;
+};
+
+&zip_mouse_gesture {
+    stroke-size = <100>;
+    gesture-cooldown-ms = <500>;
+    idle-timeout-ms = <0>;
+    enable-eager-mode;
+    always-active;
+
+    right {
+        pattern = <GESTURE_RIGHT>;
+        bindings = <&kp A>;
+    };
+};
