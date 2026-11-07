@@ -1,0 +1,27 @@
+name: Upstream compatibility
+
+on:
+  schedule:
+    # Mon 09:00 JST.
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+    inputs:
+      module-refs:
+        description: Module branches (JSON array).
+        type: string
+        default: '["v1", "v2"]'
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        module-ref: ${{ fromJSON(inputs.module-refs || '["v1", "v2"]') }}
+    uses: ./.github/workflows/run-tests.yml
+    with:
+      module-ref: ${{ matrix.module-ref }}
+      zmk-03-ref: v0.3-branch
+      zmk-main-ref: main

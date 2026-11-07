@@ -1,0 +1,153 @@
+name: Simulator tests
+
+on:
+  workflow_call:
+    inputs:
+      module-ref:
+        description: Module ref; empty uses the triggering commit.
+        type: string
+        default: ""
+      zmk-03-ref:
+        description: ZMK 0.3 commit or branch.
+        type: string
+        required: true
+      zmk-main-ref:
+        description: ZMK main commit or branch.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  collect-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.find.outputs.matrix }}
+      module-sha: ${{ steps.module.outputs.commit }}
+    steps:
+      - name: Checkout
+        id: module
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs.module-ref }}
+          persist-credentials: false
+      - name: Find tests
+        id: find
+        env:
+          ZMK_03_REF: ${{ inputs.zmk-03-ref }}
+          ZMK_MAIN_REF: ${{ inputs.zmk-main-ref }}
+        run: |
+          LEGS=$(jq -cn --arg stable "$ZMK_03_REF" --arg main "$ZMK_MAIN_REF" '[
+            {"zmk_name": "0.3", "zmk_ref": $stable, "image": "docker.io/zmkfirmware/zmk-build-arm:3.5", "board": "native_posix_64", "keymap": "native_posix_64.keymap"},
+            {"zmk_name": "0.4-dev", "zmk_ref": $main, "image": "docker.io/zmkfirmware/zmk-build-arm:4.1", "board": "native_sim//zmk_test_mock", "keymap": "native_sim.keymap"}
+          ]')
+          MATRIX='[]'
+          while IFS= read -r leg; do
+            ref=$(jq -r '.zmk_ref' <<< "${leg}")
+            if [[ ! "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+              ref=$(git ls-remote --exit-code https://github.com/zmkfirmware/zmk.git "refs/heads/$ref" | cut -f1)
+            fi
+            leg=$(jq -c --arg ref "$ref" '.zmk_ref = $ref' <<< "${leg}")
+            keymap=$(jq -r '.keymap' <<< "${leg}")
+            while IFS= read -r testdir; do
+              [ -n "${testdir}" ] || continue
+              MATRIX=$(jq -c --argjson leg "${leg}" --arg test "${testdir}" \
+                '. + [$leg + {test: $test}]' <<< "${MATRIX}")
+            done < <(find tests -name "${keymap}" -exec dirname {} \; | sort)
+          done < <(jq -c '.[]' <<< "${LEGS}")
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+
+  run-tests:
+    needs: collect-tests
+    if: ${{ needs.collect-tests.outputs.matrix != '[]' }}
+    name: "test (zmk ${{ matrix.zmk_name }}, ${{ matrix.test }})"
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.collect-tests.outputs.matrix) }}
+    steps:
+      - name: Checkout module
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          path: module
+          ref: ${{ needs.collect-tests.outputs.module-sha }}
+          persist-credentials: false
+
+      - name: Checkout ZMK
+        id: zmk
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: zmkfirmware/zmk
+          ref: ${{ matrix.zmk_ref }}
+          path: zmk
+          persist-credentials: false
+
+      - name: Record revisions
+        env:
+          MODULE_SHA: ${{ needs.collect-tests.outputs.module-sha }}
+          ZMK_NAME: ${{ matrix.zmk_name }}
+          ZMK_SHA: ${{ steps.zmk.outputs.commit }}
+        run: |
+          printf 'Module: %s\nZMK %s: %s\n' "$MODULE_SHA" "$ZMK_NAME" "$ZMK_SHA" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Cache west modules
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            zmk/modules/
+            zmk/tools/
+            zmk/zephyr/
+            zmk/bootloader/
+          key: ${{ runner.os }}-west-${{ matrix.zmk_name }}-${{ steps.zmk.outputs.commit }}
+          restore-keys: |
+            ${{ runner.os }}-west-${{ matrix.zmk_name }}-
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Initialize west workspace
+        working-directory: zmk
+        run: |
+          west init -l app
+          west update --fetch-opt=--filter=tree:0
+          west zephyr-export
+
+      - name: Run test
+        working-directory: zmk/app
+        env:
+          ZMK_EXTRA_MODULES: ${{ github.workspace }}/module
+          TEST_PATH: ${{ matrix.test }}
+          BOARD: ${{ matrix.board }}
+        run: |
+          testpath="${ZMK_EXTRA_MODULES}/${TEST_PATH}"
+          testcase=$(basename "$testpath")
+          build_dir="build/tests/${testcase}"
+
+          echo "Running ${testcase}..."
+          west build -s . -d "${build_dir}" -b "$BOARD" -p -- \
+            -DCONFIG_ASSERT=y \
+            -DZMK_CONFIG="${testpath}" \
+            -DZMK_EXTRA_MODULES="${ZMK_EXTRA_MODULES}"
+
+          "${build_dir}/zephyr/zmk.exe" \
+            | sed -e 's/.*> //' \
+            | tee "${build_dir}/keycode_events_full.log" \
+            | sed -n -f "${testpath}/events.patterns" \
+            > "${build_dir}/keycode_events.log"
+
+          diff -auZ "${testpath}/keycode_events.snapshot" "${build_dir}/keycode_events.log"
+
+      - name: Archive logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: "${{ inputs.module-ref || 'current' }}-${{ matrix.zmk_name }}-${{ strategy.job-index }}-log"
+          path: zmk/app/build/**/*.log
