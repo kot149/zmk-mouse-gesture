@@ -1,0 +1,80 @@
+#include "../../behavior_keymap.dtsi"
+
+/ {
+    keymap {
+        compatible = "zmk,keymap";
+        default_layer {
+            bindings = <&none>;
+        };
+    };
+
+    mock_x: mock_x {
+        compatible = "zmk,input-mock";
+        event-startup-delay = <10>;
+        event-period = <10>;
+        events = <
+            INPUT_EV_REL INPUT_REL_X (-90) 0
+        >;
+    };
+
+    mock_y_partial: mock_y_partial {
+        compatible = "zmk,input-mock";
+        event-startup-delay = <510>;
+        event-period = <10>;
+        events = <
+            INPUT_EV_REL INPUT_REL_Y 20 0
+        >;
+    };
+
+    mock_y_complete: mock_y_complete {
+        compatible = "zmk,input-mock";
+        event-startup-delay = <560>;
+        event-period = <10>;
+        events = <
+            INPUT_EV_REL INPUT_REL_Y 80 1
+        >;
+    };
+
+    listener_x: listener_x {
+        compatible = "zmk,input-listener";
+        device = <&mock_x>;
+        input-processors = <&zip_mouse_gesture>;
+    };
+
+    listener_y_partial: listener_y_partial {
+        compatible = "zmk,input-listener";
+        device = <&mock_y_partial>;
+        input-processors = <&zip_mouse_gesture>;
+    };
+
+    listener_y_complete: listener_y_complete {
+        compatible = "zmk,input-listener";
+        device = <&mock_y_complete>;
+        input-processors = <&zip_mouse_gesture>;
+    };
+};
+
+&kscan {
+    events = <
+        ZMK_MOCK_PRESS(0,0,2000)
+        ZMK_MOCK_RELEASE(0,0,10)
+    >;
+};
+
+&zip_mouse_gesture {
+    stroke-size = <100>;
+    movement-threshold = <0>;
+    gesture-cooldown-ms = <0>;
+    idle-timeout-ms = <0>;
+    enable-eager-mode;
+    always-active;
+
+    left {
+        pattern = <GESTURE_LEFT>;
+        bindings = <&kp B>;
+    };
+    down {
+        pattern = <GESTURE_DOWN>;
+        bindings = <&kp C>;
+    };
+};
