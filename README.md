@@ -31,12 +31,12 @@ manifest:
 
 ## Usage
 
-### 1. Check input thread stack size
+### 1. Input thread stack size
 
-Mouse gestures run in the input thread and require `CONFIG_INPUT_THREAD_STACK_SIZE` of at least 2048 bytes. The module defaults it to 2048, so you do not need to set it. If it is below 2048 on the central (or a non-split keyboard), the build fails. Remove the setting to use the default, or set it to 2048 or higher in `your-keyboard.conf`:
+The module defaults `CONFIG_INPUT_THREAD_STACK_SIZE` to 768 bytes. Builds fail below 768 on the central (or a non-split keyboard). If you have explicitly set a smaller value, remove the setting or increase it in `your-keyboard.conf`:
 
 ```ini
-CONFIG_INPUT_THREAD_STACK_SIZE=2048
+CONFIG_INPUT_THREAD_STACK_SIZE=768
 ```
 
 ### 2. Include `mouse-gesture.dtsi`
