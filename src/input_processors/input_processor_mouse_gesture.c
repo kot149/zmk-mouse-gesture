@@ -87,6 +87,17 @@ struct state_action_msg {
 };
 K_MSGQ_DEFINE(state_action_msgq, sizeof(struct state_action_msg), 8, 4);
 
+static void gesture_exec_work_cb(struct k_work *work);
+static K_WORK_DEFINE(gesture_exec_work, gesture_exec_work_cb);
+
+/* Defer execution because zmk_behavior_queue_add() may invoke behaviors
+ * synchronously, including HID report generation and endpoint sends. */
+struct gesture_exec_msg {
+    const struct gesture_pattern *pattern;
+};
+K_MSGQ_DEFINE(gesture_exec_msgq, sizeof(struct gesture_exec_msg),
+              CONFIG_ZMK_MOUSE_GESTURE_EXEC_MAX_EVENTS, 4);
+
 struct gesture_pattern {
     size_t bindings_len;
     const struct zmk_behavior_binding *bindings;
@@ -305,6 +316,30 @@ static void execute_gesture(const struct gesture_pattern *pattern) {
     }
 }
 
+static void gesture_exec_work_cb(struct k_work *work) {
+    ARG_UNUSED(work);
+
+    struct gesture_exec_msg msg;
+    while (k_msgq_get(&gesture_exec_msgq, &msg, K_NO_WAIT) == 0) {
+        execute_gesture(msg.pattern);
+    }
+}
+
+/* Idle timeout and state action handlers already run on the system work queue
+ * and call execute_gesture() directly. */
+static void queue_gesture_execution(const struct gesture_pattern *pattern) {
+    if (!pattern) {
+        return;
+    }
+
+    struct gesture_exec_msg msg = {.pattern = pattern};
+    if (k_msgq_put(&gesture_exec_msgq, &msg, K_NO_WAIT) != 0) {
+        LOG_WRN("Gesture exec queue full, dropping matched gesture");
+        return;
+    }
+    k_work_submit(&gesture_exec_work);
+}
+
 // Safe accumulation with overflow protection
 static int accumulate_movement_safe(int32_t *accumulator, int32_t delta, const char* axis) {
     if ((*accumulator > 0 && delta > INT32_MAX - *accumulator) ||
@@ -476,7 +511,7 @@ static int input_processor_mouse_gesture_handle_event(const struct device *dev,
         }
         k_mutex_unlock(&data->lock);
     }
-    execute_gesture(pattern);
+    queue_gesture_execution(pattern);
 
     return ZMK_INPUT_PROC_CONTINUE;
 }

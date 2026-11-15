@@ -10,4 +10,13 @@ config ZMK_MOUSE_GESTURE
 	  This allows converting sequences of mouse movements into key presses.
 
 config INPUT_THREAD_STACK_SIZE
-	default 2048 if ZMK_MOUSE_GESTURE
+	default 768 if ZMK_MOUSE_GESTURE
+
+config ZMK_MOUSE_GESTURE_EXEC_MAX_EVENTS
+	int "Maximum number of matched gestures waiting for execution"
+	default 8
+	depends on ZMK_MOUSE_GESTURE
+	help
+	  Size of the message queue that hands gestures matched in the input
+	  thread over to the system work queue for execution. Gestures matched
+	  while the queue is full are dropped.

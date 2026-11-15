@@ -5,10 +5,10 @@ if(CONFIG_ZMK_MOUSE_GESTURE)
   target_include_directories(app PRIVATE include)
 
   if ((NOT CONFIG_ZMK_SPLIT) OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-    if(CONFIG_INPUT_THREAD_STACK_SIZE LESS 2048)
+    if(CONFIG_INPUT_THREAD_STACK_SIZE LESS 768)
       message(FATAL_ERROR
         "CONFIG_INPUT_THREAD_STACK_SIZE=${CONFIG_INPUT_THREAD_STACK_SIZE} is too small for mouse gestures. "
-        "Remove the setting to use the module default of 2048, or set it to 2048 or higher."
+        "Remove the setting to use the module default of 768, or set it to 768 or higher."
       )
     endif()
 
